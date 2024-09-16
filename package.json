@@ -1,0 +1,21 @@
+{
+  "name": "portainer_wrapper",
+  "description": "A wrapper for portainer client and api",
+  "version": "1.0.2",
+  "author": "Jason Jafari",
+  "bin": {},
+  "bugs": "https://github.com/jafarijason/portainer_wrapper/issues",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "homepage": "https://github.com/jafarijason/portainer_wrapper",
+  "license": "MIT",
+  "repository": "https://github.com/jafarijason/portainer_wrapper",
+  "scripts": {},
+  "dependencies": {},
+  "devDependencies": {
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.2"
+  }
+}

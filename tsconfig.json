@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    // "module": "commonjs",
+    "rootDir": "src",
+    // "target": "es2022",
+    // "esModuleInterop": true,
+    "moduleResolution": "node",
+    "baseUrl": "./src",
+    "resolveJsonModule": true,
+    "outDir": "./dist",
+    "declarationDir": "./dist",
+    "emitDeclarationOnly": true,
+    "module": "ESNext",
+    "target": "ES2020",
+    // "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    // "forceConsistentCasingInFileNames": true
+    "types": ["jest", "node"],
+  },
+  "include": ["src/**/*", "index.ts"]
+}
