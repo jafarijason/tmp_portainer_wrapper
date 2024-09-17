@@ -119,6 +119,7 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
 
 
 portainerExpressMiddleware.post("/backup", async (req, res) => {
+    const isoTimeStamp = moment().toISOString()
     try {
         if (!s3BackupConfig?.accessKey) {
             throw new UnprocessableEntityException('s3 backup did not specified')
@@ -126,7 +127,7 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
         await ensurePortainerApiToken();
 
         // Path to save the tar.gz file
-        const backupFilePath = path.join(__dirname, `${moment().toISOString()}.tar.gz`);
+        const backupFilePath = path.join(__dirname, `${isoTimeStamp}_encrypt.tar.gz`);
 
         const backupResponse = await fetch(`${portainerUrl}/api/backup`, {
             method: "POST",
@@ -135,7 +136,7 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
                 Authorization: `Bearer ${portainerApiToken}`,
             },
             body: JSON.stringify({
-                password: req.body.backupPassword || "defaultPassword",
+                password: s3BackupConfig.backupPassword || "",
             }),
         });
 
@@ -155,7 +156,7 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
         const s3FileUrl = uploadResult.Location;
 
         // Respond with the S3 file URL
-        res.status(200).json({ message: "Backup stored in S3", fileUrl: s3FileUrl });
+        res.status(200).json({ message: "Backup stored in S3", fileUrl: s3FileUrl, isoTimeStamp });
 
     } catch (error) {
         res.status(500).json({ message: "Error creating or storing backup", error });
