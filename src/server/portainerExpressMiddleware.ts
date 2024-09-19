@@ -1,13 +1,14 @@
 import { Router } from "express"
 import fetch from "node-fetch"
 import jwt from "jsonwebtoken"
-import fs,{ createWriteStream, createReadStream } from "fs-extra";
+import fs, { createWriteStream, createReadStream } from "fs-extra";
 import { pipeline } from "stream";
 import { promisify } from "util";
 import path from "path";
 import AWS from 'aws-sdk';
 import { UnprocessableEntityException } from '@nestjs/common';
 import moment from 'moment'
+import { portainerApiAndJsonResponse } from "./portainerApi";
 
 const pipelineAsync = promisify(pipeline);
 
@@ -168,3 +169,14 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
     }
 });
 
+
+portainerExpressMiddleware.post("/snapshot", async (req, res) => {
+    await ensurePortainerApiToken();
+    const snapShot = await portainerApiAndJsonResponse({
+        path: `${portainerUrl}/api/endpoints`,
+        token: portainerApiToken,
+        method: 'GET',
+        body: {}
+    })
+    res.json(snapShot);
+});
