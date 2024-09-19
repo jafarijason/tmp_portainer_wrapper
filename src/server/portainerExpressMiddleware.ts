@@ -1,7 +1,7 @@
 import { Router } from "express"
 import fetch from "node-fetch"
 import jwt from "jsonwebtoken"
-import { createWriteStream, createReadStream } from "fs";
+import fs,{ createWriteStream, createReadStream } from "fs-extra";
 import { pipeline } from "stream";
 import { promisify } from "util";
 import path from "path";
@@ -27,6 +27,7 @@ interface PortainerWrapperConfig {
     portainerUserName: string;
     portainerPassword: string;
     s3BackupConfig?: S3BackupConfig;
+    refreshApiTokenIntervalSec?: number;
 }
 
 let portainerUrl = ""
@@ -110,9 +111,11 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
         await ensurePortainerApiToken()
     })()
 
-    setInterval(async () => {
-        await ensurePortainerApiToken()
-    }, 20000)
+    if (config.refreshApiTokenIntervalSec > 0) {
+        setInterval(async () => {
+            await ensurePortainerApiToken();
+        }, config.refreshApiTokenIntervalSec);
+    }
 
     return portainerExpressMiddleware
 }
@@ -154,6 +157,8 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
         // Upload the tar.gz file to S3
         const uploadResult = await uploadToS3(backupFilePath, s3BackupConfig);
         const s3FileUrl = uploadResult.Location;
+
+        await fs.unlink(backupFilePath)
 
         // Respond with the S3 file URL
         res.status(200).json({ message: "Backup stored in S3", fileUrl: s3FileUrl, isoTimeStamp });
