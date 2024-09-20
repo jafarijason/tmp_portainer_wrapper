@@ -62,8 +62,6 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
     }
 });
 
-console.log('aaaaaaaaaaaaa================')
-
 
 export const ensuePortainerSnapShotEnvs = async () => {
     await ensurePortainerApiToken();

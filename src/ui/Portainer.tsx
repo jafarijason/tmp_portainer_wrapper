@@ -7,6 +7,7 @@ const componentsObj = {
 }
 
 export const apiConfig = {
+    portainerUrl: "",
     apiUrl: "",
     apiToken: "",
     apiTokenType: "",
@@ -28,7 +29,6 @@ export const apiCallAndReturnJson = async (url, options) => {
             options.headers[apiConfig.apiTokenKey] = apiConfig.apiToken
         }
 
-        console.log(options)
 
         const responseRaw = await fetch(`${apiConfig.apiUrl}/${url}`, {
             ...options,
@@ -54,6 +54,7 @@ export const PortainerContextProvider = ({ children, config = {} }) => {
     apiConfig.apiToken = config.apiToken
     apiConfig.apiTokenType = config.apiTokenType
     apiConfig.apiTokenKey = config.apiTokenKey
+    apiConfig.portainerUrl = config.portainerUrl
 
     const [portainerState, setPortainerState] = useImmer({
         config: config,
