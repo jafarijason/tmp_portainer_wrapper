@@ -2,15 +2,16 @@ import { Router } from "express"
 import fetch from "node-fetch"
 import jwt from "jsonwebtoken"
 import fs, { createWriteStream, createReadStream } from "fs-extra";
-import { pipeline } from "stream";
-import { promisify } from "util";
+
 import path from "path";
 import AWS from 'aws-sdk';
 import { UnprocessableEntityException } from '@nestjs/common';
 import moment from 'moment'
 import { portainerApiAndJsonResponse } from "./portainerApi";
+import { ensuePortainerSnapShotEnvs, portainerExpressMiddleware } from "./routesFn";
 
-const pipelineAsync = promisify(pipeline);
+
+
 
 interface S3BackupConfig {
     bucket: string;
@@ -29,16 +30,25 @@ interface PortainerWrapperConfig {
     portainerPassword: string;
     s3BackupConfig?: S3BackupConfig;
     refreshApiTokenIntervalSec?: number;
+    portainerWrapperDataFolderPath: string
 }
 
-let portainerUrl = ""
-let portainerUserName = ""
-let portainerPassword = ""
-let portainerApiToken = ""
-let portainerApiTokenPayload: any = {}
-let s3BackupConfig: S3BackupConfig
+export let portainerUrl = ""
+export let portainerUserName = ""
+export let portainerPassword = ""
+export let portainerApiToken = ""
+export let portainerApiTokenPayload: any = {}
+export let s3BackupConfig: S3BackupConfig
+export let portainerWrapperDataFolderPath = ""
 
-const portainerExpressMiddleware = Router()
+
+
+export let portainerEnvironmentsSnapShot = {
+    timeStamp : moment().toISOString(),
+    envs: {}
+}
+
+
 
 // Configure AWS S3 client
 let s3Client: AWS.S3;
@@ -54,7 +64,7 @@ const configureS3Client = (s3BackupConfig: S3BackupConfig) => {
     });
 };
 
-const uploadToS3 = async (filePath: string, s3Config: S3BackupConfig) => {
+export const uploadToS3 = async (filePath: string, s3Config: S3BackupConfig) => {
     const fileStream = createReadStream(filePath);
     const uploadParams = {
         Bucket: s3Config.bucket,
@@ -65,13 +75,11 @@ const uploadToS3 = async (filePath: string, s3Config: S3BackupConfig) => {
 };
 
 
-portainerExpressMiddleware.get("/test", (req, res) => {
-    res.send("Test endpoint is working!")
-})
+
 
 const commonHeaders = { "Content-Type": "application/json" }
 
-const ensurePortainerApiToken = async () => {
+export const ensurePortainerApiToken = async () => {
     const currentTimeInSeconds = Math.floor(Date.now() / 1000)
     const tokenExpiry = portainerApiTokenPayload?.exp || 0
 
@@ -102,15 +110,28 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
     portainerUrl = config.portainerUrl;
     portainerUserName = config.portainerUserName;
     portainerPassword = config.portainerPassword;
+    portainerWrapperDataFolderPath = config.portainerWrapperDataFolderPath;
     if (config?.s3BackupConfig?.accessKey) {
         s3BackupConfig = config?.s3BackupConfig
         configureS3Client(config.s3BackupConfig);
     }
 
-
     (async () => {
-        await ensurePortainerApiToken()
-    })()
+        try {
+            const portainerEnvironmentsSnapShotFromFile = await fs.readJSON(`${portainerWrapperDataFolderPath}/portainerEnvironmentsSnapShot.json`) || {}
+            if(moment(portainerEnvironmentsSnapShotFromFile.timeStamp).isAfter(moment().add('20', 'minutes'))){
+                await ensuePortainerSnapShotEnvs()
+            } else {
+                portainerEnvironmentsSnapShot = {
+                    ...portainerEnvironmentsSnapShot,
+                    ...portainerEnvironmentsSnapShotFromFile
+                }
+            }
+        } catch(err){
+            await ensuePortainerSnapShotEnvs()
+            //
+        }
+    })();
 
     if (config.refreshApiTokenIntervalSec > 0) {
         setInterval(async () => {
@@ -122,61 +143,3 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
 }
 
 
-portainerExpressMiddleware.post("/backup", async (req, res) => {
-    const isoTimeStamp = moment().toISOString()
-    try {
-        if (!s3BackupConfig?.accessKey) {
-            throw new UnprocessableEntityException('s3 backup did not specified')
-        }
-        await ensurePortainerApiToken();
-
-        // Path to save the tar.gz file
-        const backupFilePath = path.join(__dirname, `${isoTimeStamp}_encrypt.tar.gz`);
-
-        const backupResponse = await fetch(`${portainerUrl}/api/backup`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${portainerApiToken}`,
-            },
-            body: JSON.stringify({
-                password: s3BackupConfig.backupPassword || "",
-            }),
-        });
-
-        if (!backupResponse.ok) {
-            return res.status(backupResponse.status).json({
-                message: "Failed to create backup",
-                status: backupResponse.statusText,
-            });
-        }
-
-        // Stream the backup content into a tar.gz file
-        const backupFileStream = createWriteStream(backupFilePath);
-        await pipelineAsync(backupResponse.body, backupFileStream);
-
-        // Upload the tar.gz file to S3
-        const uploadResult = await uploadToS3(backupFilePath, s3BackupConfig);
-        const s3FileUrl = uploadResult.Location;
-
-        await fs.unlink(backupFilePath)
-
-        // Respond with the S3 file URL
-        res.status(200).json({ message: "Backup stored in S3", fileUrl: s3FileUrl, isoTimeStamp });
-
-    } catch (error) {
-        res.status(500).json({ message: "Error creating or storing backup", error });
-    }
-});
-
-
-portainerExpressMiddleware.post("/snapshot", async (req, res) => {
-    await ensurePortainerApiToken();
-    const snapShot = await portainerApiAndJsonResponse({
-        path: `${portainerUrl}/api/endpoints`,
-        token: portainerApiToken,
-        method: 'GET',
-        body: {}
-    })
-    res.json(snapShot);
-});
