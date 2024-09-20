@@ -1,5 +1,5 @@
 import moment from "moment";
-import { ensurePortainerApiToken, portainerEnvironmentsSnapShot, portainerApiToken,  portainerUrl, portainerWrapperDataFolderPath, s3BackupConfig, uploadToS3 } from "./portainerExpressMiddleware";
+import { ensurePortainerApiToken, portainerEnvironmentsSnapShot, portainerApiToken, portainerUrl, portainerWrapperDataFolderPath, s3BackupConfig, uploadToS3 } from "./portainerExpressMiddleware";
 import { UnprocessableEntityException } from "@nestjs/common";
 import { pipeline } from "stream";
 import { promisify } from "util";
@@ -62,17 +62,19 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
     }
 });
 
+console.log('aaaaaaaaaaaaa================')
+
 
 export const ensuePortainerSnapShotEnvs = async () => {
     await ensurePortainerApiToken();
-    const snapShot = await portainerApiAndJsonResponse({
+    const snapShot: any = await portainerApiAndJsonResponse({
         path: `${portainerUrl}/api/endpoints`,
         token: portainerApiToken,
         method: 'GET',
         body: {}
     })
     portainerEnvironmentsSnapShot.timeStamp = moment().toISOString()
-    snapShot.forEach((env)=> {
+    snapShot.forEach((env) => {
         portainerEnvironmentsSnapShot.envs[env.Name] = {
             ...env,
             timeStamp: portainerEnvironmentsSnapShot.timeStamp

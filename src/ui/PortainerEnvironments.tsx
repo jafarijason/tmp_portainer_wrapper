@@ -1,9 +1,18 @@
-/** @jsxImportSource preact */
-import { h } from 'preact'; // Import Preact's `h` function for JSX rendering
-import React from 'react';
-
+import React, { useContext, useEffect } from "react"
+import { apiCallAndReturnJson, PortainerContext } from "./Portainer"
 
 const PortainerEnvironments = () => {
+    const { portainerState, setPortainerState } = useContext(PortainerContext)
+
+    useEffect(() => {
+        ;(async () => {
+            const res = await apiCallAndReturnJson("snapshot", {})
+            console.log("asdasd")
+        })()
+    }, [])
+
+    console.log(portainerState)
+
     return <h1>Env</h1>
 }
 

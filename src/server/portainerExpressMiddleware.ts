@@ -44,7 +44,7 @@ export let portainerWrapperDataFolderPath = ""
 
 
 export let portainerEnvironmentsSnapShot = {
-    timeStamp : moment().toISOString(),
+    timeStamp: moment().toISOString(),
     envs: {}
 }
 
@@ -119,7 +119,9 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
     (async () => {
         try {
             const portainerEnvironmentsSnapShotFromFile = await fs.readJSON(`${portainerWrapperDataFolderPath}/portainerEnvironmentsSnapShot.json`) || {}
-            if(moment(portainerEnvironmentsSnapShotFromFile.timeStamp).isAfter(moment().add('20', 'minutes'))){
+            if (
+                portainerEnvironmentsSnapShotFromFile.timeStamp
+                && moment(portainerEnvironmentsSnapShotFromFile.timeStamp).isAfter(moment().add('20', 'minutes'))) {
                 await ensuePortainerSnapShotEnvs()
             } else {
                 portainerEnvironmentsSnapShot = {
@@ -127,15 +129,23 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
                     ...portainerEnvironmentsSnapShotFromFile
                 }
             }
-        } catch(err){
-            await ensuePortainerSnapShotEnvs()
+        } catch (err) {
+            try {
+                await ensuePortainerSnapShotEnvs()
+            } catch (err) {
+                //
+            }
             //
         }
     })();
 
     if (config.refreshApiTokenIntervalSec > 0) {
         setInterval(async () => {
-            await ensurePortainerApiToken();
+            try {
+                await ensurePortainerApiToken();
+            } catch (err) {
+                //
+            }
         }, config.refreshApiTokenIntervalSec);
     }
 
