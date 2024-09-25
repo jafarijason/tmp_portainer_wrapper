@@ -30,7 +30,8 @@ interface PortainerWrapperConfig {
     portainerPassword: string;
     s3BackupConfig?: S3BackupConfig;
     refreshApiTokenIntervalSec?: number;
-    portainerWrapperDataFolderPath: string
+    portainerWrapperDataFolderPath: string;
+    portainerTemplatesFolder: string
 }
 
 export let portainerUrl = ""
@@ -118,6 +119,9 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
 
     (async () => {
         try {
+            if (!fs.existsSync(portainerWrapperDataFolderPath)) {
+                fs.mkdirSync(portainerWrapperDataFolderPath, { recursive: true });
+            }
             const portainerEnvironmentsSnapShotFromFile = await fs.readJSON(`${portainerWrapperDataFolderPath}/portainerEnvironmentsSnapShot.json`) || {}
             if (
                 portainerEnvironmentsSnapShotFromFile.timeStamp
