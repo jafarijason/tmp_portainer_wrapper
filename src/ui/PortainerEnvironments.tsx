@@ -50,7 +50,7 @@ const PortainerEnvironments = () => {
                         render: (row) => <p>{_.get(row, "Snapshots[0].ContainerCount", "NA")}</p>,
                     },
                     {
-                        title: "Actions",
+                        title: "Portainer",
                         align: "center" as const,
                         render: (row) => (
                             <Button
@@ -63,6 +63,42 @@ const PortainerEnvironments = () => {
                                 Open Dashboard
                             </Button>
                         ),
+                    },
+                    {
+                        title: "Traefik",
+                        align: "center" as const,
+                        render: (row) => {
+                            const snapShotEnv = _.get(row, "Snapshots[0]", {})
+                            const Containers = _.get(snapShotEnv, "DockerSnapshotRaw.Containers", [])
+                            let traefikContainer = {}
+                            Containers.forEach((container) => {
+                                if (container.State != "running") {
+                                    return
+                                }
+                                if (traefikContainer?.Id) {
+                                    return
+                                }
+                                if (container.Labels["portainer_isTraefik"]) {
+                                    traefikContainer = container
+                                }
+                            })
+
+                            const portainer_clusterDomain = traefikContainer?.Labels?.portainer_clusterDomain
+                            const portainer_subdomain = traefikContainer?.Labels?.portainer_subdomain
+                            if (!portainer_clusterDomain) {
+                                return null
+                            }
+                            return (
+                                <Button
+                                    onClick={async () => {
+                                        window.open(`https://${portainer_subdomain}.${portainer_clusterDomain}`, "_blank")
+                                    }}
+                                    //
+                                >
+                                    Open Dashboard
+                                </Button>
+                            )
+                        },
                     },
                 ]}
                 // pagination={true}
