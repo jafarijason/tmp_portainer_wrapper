@@ -1,7 +1,7 @@
 {
   "name": "portainer_wrapper",
   "description": "A wrapper for portainer client and api",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "author": "Jason Jafari",
   "type": "module",
   "bin": {},

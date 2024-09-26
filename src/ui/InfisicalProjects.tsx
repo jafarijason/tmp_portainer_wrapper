@@ -5,29 +5,31 @@ import _ from "lodash"
 import { useImmer } from "use-immer"
 const { Text } = Typography
 
-const PortainerEnvironments = () => {
+const InfisicalProjects = () => {
     const { portainerState, setPortainerState } = useContext(PortainerContext)
 
-    const [envs, setEnvs] = useImmer({
-        data: [],
+    const [apiDataState, setApiDataState] = useImmer({
+        data: {},
     })
 
     useEffect(() => {
         ;(async () => {
-            const res = await apiCallAndReturnJson("snapshotEnvs", {
+            const res = await apiCallAndReturnJson("infisicalProjectsSnapShot", {
                 method: "POST",
             })
-            setEnvs((draft) => {
+            setApiDataState((draft) => {
                 draft.data = res
             })
         })()
     }, [])
 
+    const projects = apiDataState?.data?.projects || {}
+
     return (
         <Flex gap="middle" vertical>
             <Flex justify="center" style={{ marginTop: "20px" }}>
                 <Text>
-                    <b>Environments</b>
+                    <b>Infisical Projects</b>
                 </Text>
             </Flex>
 
@@ -35,40 +37,43 @@ const PortainerEnvironments = () => {
                 size="small"
                 columns={[
                     {
-                        title: "Id",
-                        dataIndex: "Id",
+                        title: "id",
+                        dataIndex: "id",
                         align: "center" as const,
                     },
                     {
                         title: "Name",
-                        dataIndex: "Name",
+                        dataIndex: "name",
                         align: "center" as const,
                     },
                     {
-                        title: "Number of Containers",
+                        title: "Envs",
                         align: "center" as const,
-                        render: (row) => <p>{_.get(row, "Snapshots[0].ContainerCount", "NA")}</p>,
+                        render: (row) => (
+                            <p>
+                                {Object.keys(row?.environmentsObj || {}).join(",")} {Object.keys(row?.environmentsObj || {}).length}
+                            </p>
+                        ),
                     },
                     {
                         title: "Actions",
                         align: "center" as const,
-                        render: (row) => (
-                            <Button
-                                onClick={async () => {
-                                    window.open(`${portainerState?.config?.portainerUrl}/#!/${row.Id}/docker/dashboard`, "_blank")
-                                    // await actions.impersonate({
-                                    //     userId: row.id,
-                                    // })
-                                }}>
-                                Open Dashboard
-                            </Button>
-                        ),
+                        render: (row) => {
+                            return (
+                                <Button
+                                    onClick={async () => {
+                                        window.open(`${portainerState?.config?.infisicalUrl}/project/${row.id}/secrets/overview`, "_blank")
+                                    }}>
+                                    Open Project
+                                </Button>
+                            )
+                        },
                     },
                 ]}
                 // pagination={true}
-                loading={envs.data.length == 0}
+                loading={Object.keys(projects)?.length == 0}
                 //@ts-ignore
-                dataSource={(envs.data || []).map((record) => ({ ...record, key: record.Id }))}
+                dataSource={(Object.values(projects) || []).map((record) => ({ ...record, key: record.id }))}
                 pagination={{ pageSize: 15 }}
                 // scroll={{ y: 240 }}
                 sticky={{ offsetHeader: 5 }}
@@ -77,4 +82,4 @@ const PortainerEnvironments = () => {
     )
 }
 
-export default PortainerEnvironments
+export default InfisicalProjects

@@ -1,13 +1,16 @@
 import React from "react"
 import { useImmer } from "use-immer"
 import PortainerEnvironments from "./PortainerEnvironments"
+import InfisicalProjects from "./InfisicalProjects"
 
 const componentsObj = {
     PortainerEnvironments,
+    InfisicalProjects,
 }
 
 export const apiConfig = {
     portainerUrl: "",
+    infisicalUrl: "",
     apiUrl: "",
     apiToken: "",
     apiTokenType: "",
@@ -29,7 +32,6 @@ export const apiCallAndReturnJson = async (url, options) => {
             options.headers[apiConfig.apiTokenKey] = apiConfig.apiToken
         }
 
-
         const responseRaw = await fetch(`${apiConfig.apiUrl}/${url}`, {
             ...options,
             // credentials: "include",
@@ -39,7 +41,7 @@ export const apiCallAndReturnJson = async (url, options) => {
 
         return response
     } catch (error) {
-        console.log(error)
+        console.error("Error apiCallAndReturnJson", error)
         return {
             error: true,
             errorMessage: error.message,
@@ -55,6 +57,7 @@ export const PortainerContextProvider = ({ children, config = {} }) => {
     apiConfig.apiTokenType = config.apiTokenType
     apiConfig.apiTokenKey = config.apiTokenKey
     apiConfig.portainerUrl = config.portainerUrl
+    apiConfig.infisicalUrl = config.infisicalUrl
 
     const [portainerState, setPortainerState] = useImmer({
         config: config,

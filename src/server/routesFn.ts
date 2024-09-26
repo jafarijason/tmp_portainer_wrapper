@@ -1,13 +1,26 @@
-import moment from "moment";
-import { ensurePortainerApiToken, portainerEnvironmentsSnapShot, portainerApiToken, portainerUrl, portainerWrapperDataFolderPath, s3BackupConfig, uploadToS3 } from "./portainerExpressMiddleware";
-import { UnprocessableEntityException } from "@nestjs/common";
-import { pipeline } from "stream";
-import { promisify } from "util";
+import moment from "moment"
+import {
+    ensurePortainerApiToken,
+    portainerEnvironmentsSnapShot,
+    portainerApiToken,
+    portainerUrl,
+    portainerWrapperDataFolderPath,
+    s3BackupConfig,
+    uploadToS3,
+    ensureInfisicalApiToken,
+    infisicalApiToken,
+    infisicalConfig,
+    infisicalProjectsSnapShot,
+} from "./portainerExpressMiddleware"
+import { UnprocessableEntityException } from "@nestjs/common"
+import { pipeline } from "stream"
+import { promisify } from "util"
 
-import fs from "fs-extra";
-import { portainerApiAndJsonResponse } from "./portainerApi";
-import { Router } from "express";
-const pipelineAsync = promisify(pipeline);
+import fs from "fs-extra"
+import { portainerApiAndJsonResponse } from "./portainerApi"
+import { Router } from "express"
+import { infisicalApiAndJsonResponse } from "./infisicalApi"
+const pipelineAsync = promisify(pipeline)
 
 export const portainerExpressMiddleware = Router()
 
@@ -19,12 +32,12 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
     const isoTimeStamp = moment().toISOString()
     try {
         if (!s3BackupConfig?.accessKey) {
-            throw new UnprocessableEntityException('s3 backup did not specified')
+            throw new UnprocessableEntityException("s3 backup did not specified")
         }
-        await ensurePortainerApiToken();
+        await ensurePortainerApiToken()
 
         // Path to save the tar.gz file
-        const backupFilePath = `${portainerWrapperDataFolderPath}/${isoTimeStamp}_encrypt.tar.gz`;
+        const backupFilePath = `${portainerWrapperDataFolderPath}/${isoTimeStamp}_encrypt.tar.gz`
 
         const backupResponse = await fetch(`${portainerUrl}/api/backup`, {
             method: "POST",
@@ -35,59 +48,93 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
             body: JSON.stringify({
                 password: s3BackupConfig.backupPassword || "",
             }),
-        });
+        })
 
         if (!backupResponse.ok) {
             return res.status(backupResponse.status).json({
                 message: "Failed to create backup",
                 status: backupResponse.statusText,
-            });
+            })
         }
 
         // Stream the backup content into a tar.gz file
-        const backupFileStream = fs.createWriteStream(backupFilePath);
-        await pipelineAsync(backupResponse.body, backupFileStream);
+        const backupFileStream = fs.createWriteStream(backupFilePath)
+        await pipelineAsync(backupResponse.body, backupFileStream)
 
         // Upload the tar.gz file to S3
-        const uploadResult = await uploadToS3(backupFilePath, s3BackupConfig);
-        const s3FileUrl = uploadResult.Location;
+        const uploadResult = await uploadToS3(backupFilePath, s3BackupConfig)
+        const s3FileUrl = uploadResult.Location
 
         await fs.unlink(backupFilePath)
 
         // Respond with the S3 file URL
-        res.status(200).json({ message: "Backup stored in S3", fileUrl: s3FileUrl, isoTimeStamp });
-
+        res.status(200).json({ message: "Backup stored in S3", fileUrl: s3FileUrl, isoTimeStamp })
     } catch (error) {
-        res.status(500).json({ message: "Error creating or storing backup", error });
+        res.status(500).json({ message: "Error creating or storing backup", error })
     }
-});
-
+})
 
 export const ensuePortainerSnapShotEnvs = async () => {
-    await ensurePortainerApiToken();
-    const snapShot: any = await portainerApiAndJsonResponse({
-        path: `${portainerUrl}/api/endpoints`,
-        token: portainerApiToken,
-        method: 'GET',
-        body: {}
-    })
-    portainerEnvironmentsSnapShot.timeStamp = moment().toISOString()
-    snapShot.forEach((env) => {
-        portainerEnvironmentsSnapShot.envs[env.Name] = {
-            ...env,
-            timeStamp: portainerEnvironmentsSnapShot.timeStamp
-        }
-    })
-    await fs.writeFile(
-        `${portainerWrapperDataFolderPath}/portainerEnvironmentsSnapShot.json`,
-        JSON.stringify(portainerEnvironmentsSnapShot, null, 4),
-        "utf8"
-    )
-    return snapShot
+    try {
+        await ensurePortainerApiToken()
+        const snapShot: any = await portainerApiAndJsonResponse({
+            path: `${portainerUrl}/api/endpoints`,
+            token: portainerApiToken,
+            method: "GET",
+            body: {},
+        })
+        portainerEnvironmentsSnapShot.timeStamp = moment().toISOString()
+        snapShot.forEach((env) => {
+            portainerEnvironmentsSnapShot.envs[env.Name] = {
+                ...env,
+                timeStamp: portainerEnvironmentsSnapShot.timeStamp,
+            }
+        })
+        await fs.writeFile(`${portainerWrapperDataFolderPath}/portainerEnvironmentsSnapShot.json`, JSON.stringify(portainerEnvironmentsSnapShot, null, 4), "utf8")
+        return snapShot
+    } catch (err) {
+        console.error("Error ensuePortainerSnapShotEnvs", err.message)
+    }
 }
 
-portainerExpressMiddleware.post("/snapshot", async (req, res) => {
+portainerExpressMiddleware.post("/snapshotEnvs", async (req, res) => {
     const snapShot = await ensuePortainerSnapShotEnvs()
     // portainerEnvironmentsSnapShot.envsList = snapShot
-    res.json(snapShot);
-});
+    res.json(portainerEnvironmentsSnapShot)
+})
+
+export const ensueInfisicalProjectsSnapShot = async () => {
+    try {
+        await ensureInfisicalApiToken()
+        const snapShot: any = await infisicalApiAndJsonResponse({
+            path: `${infisicalConfig.infisicalHostUrl}/api/v2/organizations/${infisicalConfig.infisicalOrganizationId}/workspaces`,
+            token: infisicalApiToken,
+            method: "GET",
+            body: {},
+        })
+        infisicalProjectsSnapShot.timeStamp = moment().toISOString()
+        snapShot?.workspaces?.forEach((project) => {
+            const environmentsObj: any = {}
+            project?.environments?.forEach((env) => {
+                environmentsObj[env.slug] = env
+            })
+            infisicalProjectsSnapShot.projects[project.name] = {
+                ...project,
+                timeStamp: infisicalProjectsSnapShot.timeStamp,
+                environmentsObj,
+                numberOfEnvironments: project?.environments?.length,
+            }
+        })
+        //
+        await fs.writeFile(`${portainerWrapperDataFolderPath}/infisicalProjectsSnapShot.json`, JSON.stringify(infisicalProjectsSnapShot, null, 4), "utf8")
+        return snapShot
+    } catch (err) {
+        console.error("Error ensueInfisicalProjectsSnapShot", err.message)
+    }
+}
+
+portainerExpressMiddleware.post("/infisicalProjectsSnapShot", async (req, res) => {
+    const snapShot = await ensueInfisicalProjectsSnapShot()
+    // portainerEnvironmentsSnapShot.envsList = snapShot
+    res.json(infisicalProjectsSnapShot)
+})
