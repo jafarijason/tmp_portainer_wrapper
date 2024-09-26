@@ -68,7 +68,7 @@ const PortainerEnvironments = () => {
                 // pagination={true}
                 loading={envs.data.length == 0}
                 //@ts-ignore
-                dataSource={(envs.data || []).map((record) => ({ ...record, key: record.Id }))}
+                dataSource={(Object.values(envs.data?.envs || {}) || []).map((record) => ({ ...record, key: record.Id }))}
                 pagination={{ pageSize: 15 }}
                 // scroll={{ y: 240 }}
                 sticky={{ offsetHeader: 5 }}
