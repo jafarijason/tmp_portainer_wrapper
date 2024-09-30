@@ -36,8 +36,7 @@ interface PortainerWrapperConfig {
     portainerPassword: string
     s3BackupConfig?: S3BackupConfig
     refreshApiTokenIntervalSec?: number
-    portainerWrapperDataFolderPath: string
-    portainerTemplatesFolder: string
+    portainerWrapperFolder: string
     infisicalConfig?: InfisicalConfig
 }
 
@@ -47,7 +46,8 @@ export let portainerPassword = ""
 export let portainerApiToken = ""
 export let portainerApiTokenPayload: any = {}
 export let s3BackupConfig: S3BackupConfig
-export let portainerWrapperDataFolderPath = ""
+export let portainerWrapperFolder = ""
+export let portainerWrapperTmpFolderPath = ""
 export let infisicalConfig: InfisicalConfig
 export let infisicalApiToken = ""
 export let infisicalApiTokenPayload: any = {}
@@ -187,7 +187,7 @@ export const ensurePortainerApiToken = async () => {
 const ensurePortainerSnapShotsOnFs = async () => {
     try {
 
-        const portainerEnvironmentsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperDataFolderPath}/portainerEnvironmentsSnapShot.json`)) || {}
+        const portainerEnvironmentsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/portainerEnvironmentsSnapShot.json`)) || {}
         if (portainerEnvironmentsSnapShotFromFile.timeStamp && moment(portainerEnvironmentsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
             await ensuePortainerSnapShotEnvs()
         } else {
@@ -206,7 +206,7 @@ const ensurePortainerSnapShotsOnFs = async () => {
 const ensureInfisicalProjectsSnapShotOnFs = async () => {
 
     try {
-        const infisicalProjectsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperDataFolderPath}/infisicalProjectsSnapShot.json`)) || {}
+        const infisicalProjectsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/infisicalProjectsSnapShot.json`)) || {}
         if (infisicalProjectsSnapShotFromFile.timeStamp && moment(infisicalProjectsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
             await ensueInfisicalProjectsSnapShot()
         } else {
@@ -225,10 +225,12 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
     portainerUrl = config.portainerUrl
     portainerUserName = config.portainerUserName
     portainerPassword = config.portainerPassword
-    portainerWrapperDataFolderPath = config.portainerWrapperDataFolderPath
+    portainerWrapperFolder = config.portainerWrapperFolder
 
-    if (!fs.existsSync(portainerWrapperDataFolderPath)) {
-        fs.mkdirSync(portainerWrapperDataFolderPath, { recursive: true })
+    portainerWrapperTmpFolderPath = `${portainerWrapperFolder}/.~tmp`
+
+    if (!fs.existsSync(portainerWrapperTmpFolderPath)) {
+        fs.mkdirSync(portainerWrapperTmpFolderPath, { recursive: true })
     }
     //
     if (config?.s3BackupConfig?.accessKey) {

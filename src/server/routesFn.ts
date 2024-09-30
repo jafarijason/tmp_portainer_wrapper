@@ -4,7 +4,7 @@ import {
     portainerEnvironmentsSnapShot,
     portainerApiToken,
     portainerUrl,
-    portainerWrapperDataFolderPath,
+    portainerWrapperTmpFolderPath,
     s3BackupConfig,
     uploadToS3,
     ensureInfisicalApiToken,
@@ -37,7 +37,7 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
         await ensurePortainerApiToken()
 
         // Path to save the tar.gz file
-        const backupFilePath = `${portainerWrapperDataFolderPath}/${isoTimeStamp}_encrypt.tar.gz`
+        const backupFilePath = `${portainerWrapperTmpFolderPath}/${isoTimeStamp}_encrypt.tar.gz`
 
         const backupResponse = await fetch(`${portainerUrl}/api/backup`, {
             method: "POST",
@@ -90,7 +90,7 @@ export const ensuePortainerSnapShotEnvs = async () => {
                 timeStamp: portainerEnvironmentsSnapShot.timeStamp,
             }
         })
-        await fs.writeFile(`${portainerWrapperDataFolderPath}/portainerEnvironmentsSnapShot.json`, JSON.stringify(portainerEnvironmentsSnapShot, null, 4), "utf8")
+        await fs.writeFile(`${portainerWrapperTmpFolderPath}/portainerEnvironmentsSnapShot.json`, JSON.stringify(portainerEnvironmentsSnapShot, null, 4), "utf8")
         return snapShot
     } catch (err) {
         console.error("Error ensuePortainerSnapShotEnvs", err.message)
@@ -126,7 +126,7 @@ export const ensueInfisicalProjectsSnapShot = async () => {
             }
         })
         //
-        await fs.writeFile(`${portainerWrapperDataFolderPath}/infisicalProjectsSnapShot.json`, JSON.stringify(infisicalProjectsSnapShot, null, 4), "utf8")
+        await fs.writeFile(`${portainerWrapperTmpFolderPath}/infisicalProjectsSnapShot.json`, JSON.stringify(infisicalProjectsSnapShot, null, 4), "utf8")
         return snapShot
     } catch (err) {
         console.error("Error ensueInfisicalProjectsSnapShot", err.message)
