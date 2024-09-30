@@ -11,6 +11,8 @@ import {
     infisicalApiToken,
     infisicalConfig,
     infisicalProjectsSnapShot,
+    portainerWrapperFolder,
+    commonTemplatesSnapShot,
 } from "./portainerExpressMiddleware"
 import { UnprocessableEntityException } from "@nestjs/common"
 import { pipeline } from "stream"
@@ -20,6 +22,9 @@ import fs from "fs-extra"
 import { portainerApiAndJsonResponse } from "./portainerApi"
 import { Router } from "express"
 import { infisicalApiAndJsonResponse } from "./infisicalApi"
+import * as YAML from 'js-yaml';
+import _ from "lodash"
+
 const pipelineAsync = promisify(pipeline)
 
 export const portainerExpressMiddleware = Router()
@@ -74,7 +79,10 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
     }
 })
 
-export const ensuePortainerSnapShotEnvs = async () => {
+export const ensuePortainerSnapShotEnvs = async (force = false) => {
+    if (!force && portainerEnvironmentsSnapShot.timeStamp && moment().isBefore(moment(portainerEnvironmentsSnapShot.timeStamp).add('1', 'minutes'))) {
+        return
+    }
     try {
         await ensurePortainerApiToken()
         const snapShot: any = await portainerApiAndJsonResponse({
@@ -103,7 +111,10 @@ portainerExpressMiddleware.post("/snapshotEnvs", async (req, res) => {
     res.json(portainerEnvironmentsSnapShot)
 })
 
-export const ensueInfisicalProjectsSnapShot = async () => {
+export const ensueInfisicalProjectsSnapShot = async (force = false) => {
+    if (!force && infisicalProjectsSnapShot.timeStamp && moment().isBefore(moment(infisicalProjectsSnapShot.timeStamp).add('5', 'minutes'))) {
+        return
+    }
     try {
         await ensureInfisicalApiToken()
         const snapShot: any = await infisicalApiAndJsonResponse({
@@ -138,3 +149,58 @@ portainerExpressMiddleware.post("/infisicalProjectsSnapShot", async (req, res) =
     // portainerEnvironmentsSnapShot.envsList = snapShot
     res.json(infisicalProjectsSnapShot)
 })
+
+export const ensureCommonTemplatesSnapShot = async (force = false) => {
+
+    if (!force && commonTemplatesSnapShot.timeStamp && moment().isBefore(moment(commonTemplatesSnapShot.timeStamp).add('5', 'minutes'))) {
+        return
+    }
+    const commonTemplatesFolder = `${portainerWrapperFolder}/commonTemplates`
+
+
+    const files = await fs.readdir(commonTemplatesFolder);
+    const templatesFiles = files.filter(file => file.endsWith('.yaml') || file.endsWith('.yml'));
+    const templates = {}
+
+    for (const templateFile of templatesFiles) {
+        const templateContent = await fs.readFile(`${commonTemplatesFolder}/${templateFile}`, 'utf8');
+        const templateObj: any = YAML.load(templateContent);
+        const portainerWrapperMetadata = templateObj.portainerWrapperMetadata || {}
+        delete templateObj.portainerWrapperMetadata
+        Object.keys(templateObj.services).forEach((key)=> {
+            const service = templateObj.services[key]
+            const labelsSet = new Set(service?.labels || [])
+            labelsSet.add(`portainer_commonTemplates=${templateFile}`)
+            service.labels = [...labelsSet]
+        })
+
+        _.set(templates, `[${templateFile?.replace(/\./g, '__')}]`, {
+            fileName: templateFile,
+            templateName: portainerWrapperMetadata?.name,
+            portainerWrapperMetadata,
+            templateYaml: YAML.dump(templateObj, {})
+        })
+
+    }
+
+
+    commonTemplatesSnapShot.timeStamp = moment().toISOString()
+    commonTemplatesSnapShot.templates = templates
+
+    await fs.writeFile(`${portainerWrapperTmpFolderPath}/commonTemplatesSnapShot.json`, JSON.stringify(commonTemplatesSnapShot, null, 4), "utf8")
+
+
+    return commonTemplatesSnapShot
+}
+
+portainerExpressMiddleware.post("/commonTemplatesSnapShot", async (req, res) => {
+
+    const snapShot = await ensureCommonTemplatesSnapShot()
+
+
+    res.json(commonTemplatesSnapShot)
+    // const snapShot = await ensueInfisicalProjectsSnapShot()
+    // // portainerEnvironmentsSnapShot.envsList = snapShot
+    // res.json(infisicalProjectsSnapShot)
+})
+

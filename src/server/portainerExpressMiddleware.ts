@@ -5,10 +5,8 @@ import fs, { createWriteStream, createReadStream } from "fs-extra"
 
 import path from "path"
 import AWS from "aws-sdk"
-import { UnprocessableEntityException } from "@nestjs/common"
 import moment from "moment"
-import { portainerApiAndJsonResponse } from "./portainerApi"
-import { ensueInfisicalProjectsSnapShot, ensuePortainerSnapShotEnvs, portainerExpressMiddleware } from "./routesFn"
+import { ensueInfisicalProjectsSnapShot, ensuePortainerSnapShotEnvs, ensureCommonTemplatesSnapShot, portainerExpressMiddleware } from "./routesFn"
 import { InfisicalSDK, ApiClient } from "@infisical/sdk"
 
 interface S3BackupConfig {
@@ -52,13 +50,16 @@ export let infisicalConfig: InfisicalConfig
 export let infisicalApiToken = ""
 export let infisicalApiTokenPayload: any = {}
 
-export let portainerEnvironmentsSnapShot = {
-    timeStamp: moment().toISOString(),
+export let portainerEnvironmentsSnapShot: any = {
+    // timeStamp: moment().toISOString(),
     envs: {},
 }
-export let infisicalProjectsSnapShot = {
-    timeStamp: moment().toISOString(),
+export let infisicalProjectsSnapShot: any = {
+    // timeStamp: moment().toISOString(),
     projects: {},
+}
+export let commonTemplatesSnapShot: any = {
+    templates: {},
 }
 
 // Configure AWS S3 client
@@ -189,7 +190,7 @@ const ensurePortainerSnapShotsOnFs = async () => {
 
         const portainerEnvironmentsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/portainerEnvironmentsSnapShot.json`)) || {}
         if (portainerEnvironmentsSnapShotFromFile.timeStamp && moment(portainerEnvironmentsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
-            await ensuePortainerSnapShotEnvs()
+            await ensuePortainerSnapShotEnvs(true)
         } else {
             portainerEnvironmentsSnapShot = {
                 ...portainerEnvironmentsSnapShot,
@@ -198,7 +199,7 @@ const ensurePortainerSnapShotsOnFs = async () => {
         }
     } catch (err) {
         console.error("Error: portainerEnvironmentsSnapShot ", err.message)
-        await ensuePortainerSnapShotEnvs()
+        await ensuePortainerSnapShotEnvs(true)
         //
     }
 }
@@ -208,7 +209,7 @@ const ensureInfisicalProjectsSnapShotOnFs = async () => {
     try {
         const infisicalProjectsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/infisicalProjectsSnapShot.json`)) || {}
         if (infisicalProjectsSnapShotFromFile.timeStamp && moment(infisicalProjectsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
-            await ensueInfisicalProjectsSnapShot()
+            await ensueInfisicalProjectsSnapShot(true)
         } else {
             infisicalProjectsSnapShot = {
                 ...infisicalProjectsSnapShot,
@@ -217,7 +218,7 @@ const ensureInfisicalProjectsSnapShotOnFs = async () => {
         }
     } catch (err) {
         console.error("Error: ensureInfisicalProjectsSnapShotOnFs ", err.message)
-        await ensueInfisicalProjectsSnapShot()
+        await ensueInfisicalProjectsSnapShot(true)
     }
 }
 
@@ -256,6 +257,8 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
         }
 
         ensureInfisicalProjectsSnapShotOnFs();
+
+        ensureCommonTemplatesSnapShot(true);
 
     };
 

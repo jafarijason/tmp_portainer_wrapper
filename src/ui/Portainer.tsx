@@ -2,10 +2,12 @@ import React from "react"
 import { useImmer } from "use-immer"
 import PortainerEnvironments from "./PortainerEnvironments"
 import InfisicalProjects from "./InfisicalProjects"
+import CommonTemplates from "./CommonTemplates"
 
 const componentsObj = {
     PortainerEnvironments,
     InfisicalProjects,
+    CommonTemplates,
 }
 
 export const apiConfig = {

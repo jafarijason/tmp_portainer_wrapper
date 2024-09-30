@@ -45,9 +45,89 @@ const PortainerEnvironments = () => {
                         align: "center" as const,
                     },
                     {
+                        title: "Type",
+                        align: "center" as const,
+                        render: (row) => {
+                            const isSwarm = _.get(row, "Snapshots[0].Swarm", false)
+                            if (isSwarm) {
+                                return <p>Swarm</p>
+                            }
+
+                            return <p>Docker Stand alone</p>
+                        },
+                    },
+                    {
+                        title: "Meta Data",
+                        align: "center" as const,
+                        render: (row) => {
+                            const MetaData = _.cloneDeep(_.get(row, "Snapshots[0]", {}))
+                            delete MetaData.Time
+                            delete MetaData.DockerSnapshotRaw
+                            delete MetaData.GpuUseList
+
+                            return (
+                                <div style={{ textAlign: "left" }}>
+                                    {Object.entries(MetaData).map(([key, value], index) => (
+                                        <div key={`${row.Id}_${index}_${key}`}>
+                                            {key}: {String(value)}
+                                        </div>
+                                    ))}
+                                </div>
+                            )
+                            return <p>{JSON.stringify(MetaData)}</p>
+                        },
+                    },
+                    {
                         title: "Number of Containers",
                         align: "center" as const,
                         render: (row) => <p>{_.get(row, "Snapshots[0].ContainerCount", "NA")}</p>,
+                    },
+                    {
+                        title: "Manged by Portainer Containers",
+                        align: "center" as const,
+                        render: (row) => {
+                            const snapShotEnv = _.get(row, "Snapshots[0]", {})
+                            const Containers = _.get(snapShotEnv, "DockerSnapshotRaw.Containers", [])
+                            let portainerManageContainer = {}
+                            Containers.forEach((container) => {
+                                if (container.State != "running") {
+                                    return
+                                }
+                                // const portainerManagedContainerIndex = Object.keys(container?.Labels || {}).findIndex((label) => label.startsWith("portainer_serviceName"))
+                                // if (portainerManagedContainerIndex < 0) {
+                                //     return
+                                // }
+                                if (container.Labels["portainer_serviceName"]) {
+                                    portainerManageContainer[container?.Id] = {
+                                        name: container.Labels["portainer_serviceName"],
+                                        ...container,
+                                    }
+                                }
+                            })
+
+                            return (
+                                <div style={{ textAlign: "left" }}>
+                                    No: {Object.keys(portainerManageContainer).length}
+                                    {Object.entries(portainerManageContainer).map(([key, value], index) => {
+                                        return (
+                                            <div key={`${value.Id}_${index}_${key}`}>
+                                                <a href={`${portainerState?.config?.portainerUrl}/#!/${row.Id}/docker/containers/${value.Id}`} target="_blank">
+                                                    {value["name"]}
+                                                </a>
+                                                -
+                                                <a href={`${portainerState?.config?.portainerUrl}/#!/${row.Id}/docker/containers/${value.Id}/logs`} target="_blank">
+                                                    logs
+                                                </a>
+                                                -
+                                                <a href={`${portainerState?.config?.portainerUrl}/#!/${row.Id}/docker/containers/${value.Id}/exec`} target="_blank">
+                                                    shell
+                                                </a>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )
+                        },
                     },
                     {
                         title: "Portainer",
