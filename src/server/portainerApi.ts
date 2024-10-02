@@ -15,6 +15,8 @@ export const portainerApiAndJsonResponse = async ({ path, token, method, body = 
             }
         )
 
+        // console.log(path)
+        // debugger
         if (!responseRaw.ok) {
             throw new Error(`Failed portainerApiAndJsonResponse ${JSON.stringify(responseRaw)}`)
         }
@@ -33,6 +35,6 @@ export const portainerApiAndJsonResponse = async ({ path, token, method, body = 
             }
         }
     } catch (err) {
-        console.log('Error portainerApiAndJsonResponse', err)
+        console.log("Error portainerApiAndJsonResponse", err)
     }
 }

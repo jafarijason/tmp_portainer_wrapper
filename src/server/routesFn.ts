@@ -87,7 +87,6 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
         return
     }
     try {
-        await ensurePortainerApiToken()
         await portainerApiAndJsonResponse({
             path: `${portainerUrl}/api/endpoints/snapshot`,
             token: await ensurePortainerApiToken(),
@@ -128,25 +127,78 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
 
         await Promise.all(
             envsMap.map(async (env) => {
-                const result: any =
-                    (await portainerApiAndJsonResponse({
-                        // path: `${portainerUrl}/api/endpoints/${envId}/edge/stacks`,
-                        path: `${portainerUrl}/api/stacks?filters=%7B"EndpointID":${env.envId},"IncludeOrphanedStacks":true%7D`,
+                try {
+                    const discoverInfo: any = await portainerApiAndJsonResponse({
+                        path: `${portainerUrl}/api/endpoints/${env.envId}/docker/info`,
                         token: await ensurePortainerApiToken(),
                         method: "GET",
                         body: {},
-                    })) || []
+                    })
 
-                const discoverStacks: any = {}
-                result.forEach((stack) => {
-                    discoverStacks[`${stack.Name}`] = stack
-                })
+                    _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].discoverInfo`, discoverInfo)
+                } catch (err) {
+                    console.log("Error discoverInfo", env, err)
+                }
+            })
+        )
+        await Promise.all(
+            envsMap.map(async (env) => {
+                try {
+                    const discoverVersion: any = await portainerApiAndJsonResponse({
+                        path: `${portainerUrl}/api/endpoints/${env.envId}/docker/version`,
+                        token: await ensurePortainerApiToken(),
+                        method: "GET",
+                        body: {},
+                    })
 
-                _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].discoverStacks`, discoverStacks)
+                    _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].discoverVersion`, discoverVersion)
+                } catch (err) {
+                    console.log("Error discoverVersion", env, err)
+                }
+            })
+        )
 
-                return {
-                    envKey: env.envKey,
-                    stacks: result,
+        await Promise.all(
+            envsMap.map(async (env) => {
+                try {
+                    const result: any =
+                        (await portainerApiAndJsonResponse({
+                            path: `${portainerUrl}/api/stacks?filters=%7B"EndpointID":${env.envId},"IncludeOrphanedStacks":true%7D`,
+                            token: await ensurePortainerApiToken(),
+                            method: "GET",
+                            body: {},
+                        })) || []
+
+                    const discoverStacks: any = {}
+                    result.forEach((stack) => {
+                        discoverStacks[`${stack.Name}`] = stack
+                    })
+
+                    _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].discoverStacks`, discoverStacks)
+                } catch (err) {
+                    console.log("Error discoverStacks", env, err)
+                }
+            })
+        )
+        await Promise.all(
+            envsMap.map(async (env) => {
+                try {
+                    const result: any =
+                        (await portainerApiAndJsonResponse({
+                            path: `${portainerUrl}/api/endpoints/${env.envId}/docker/containers/json?all=true`,
+                            token: await ensurePortainerApiToken(),
+                            method: "GET",
+                            body: {},
+                        })) || []
+
+                    const discoverContainers: any = {}
+                    result.forEach((container) => {
+                        discoverContainers[`${container.Id}`] = container
+                    })
+
+                    _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].discoverContainers`, discoverContainers)
+                } catch (err) {
+                    console.log("Error discoverContainers", env, err)
                 }
             })
         )
