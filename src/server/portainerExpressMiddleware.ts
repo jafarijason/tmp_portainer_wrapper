@@ -79,7 +79,7 @@ const configureS3Client = (s3BackupConfig: S3BackupConfig) => {
 }
 
 // Configure Infisical Client
-let infisicalClient: InfisicalSDK
+export let infisicalClient: InfisicalSDK
 
 const configureInfisicalClient = async (infisicalConfig: InfisicalConfig) => {
     infisicalClient = new InfisicalSDK({

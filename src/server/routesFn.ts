@@ -2,17 +2,16 @@ import moment from "moment"
 import {
     ensurePortainerApiToken,
     portainerEnvironmentsSnapShot,
-    portainerApiToken,
     portainerUrl,
     portainerWrapperTmpFolderPath,
     s3BackupConfig,
     uploadToS3,
     ensureInfisicalApiToken,
-    infisicalApiToken,
     infisicalConfig,
     infisicalProjectsSnapShot,
     portainerWrapperFolder,
     commonTemplatesSnapShot,
+    infisicalClient,
 } from "./portainerExpressMiddleware"
 import { UnprocessableEntityException } from "@nestjs/common"
 import { pipeline } from "stream"
@@ -22,8 +21,12 @@ import fs from "fs-extra"
 import { portainerApiAndJsonResponse } from "./portainerApi"
 import { Router } from "express"
 import { infisicalApiAndJsonResponse } from "./infisicalApi"
-import * as YAML from 'js-yaml';
+import * as YAML from "js-yaml"
 import _ from "lodash"
+
+import nunjucks from "nunjucks"
+
+nunjucks.configure({ autoescape: true })
 
 const pipelineAsync = promisify(pipeline)
 
@@ -48,7 +51,7 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${portainerApiToken}`,
+                Authorization: `Bearer ${await ensurePortainerApiToken()}`,
             },
             body: JSON.stringify({
                 password: s3BackupConfig.backupPassword || "",
@@ -80,17 +83,34 @@ portainerExpressMiddleware.post("/backup", async (req, res) => {
 })
 
 export const ensuePortainerSnapShotEnvs = async (force = false) => {
-    if (!force && portainerEnvironmentsSnapShot.timeStamp && moment().isBefore(moment(portainerEnvironmentsSnapShot.timeStamp).add('1', 'minutes'))) {
+    if (!force && portainerEnvironmentsSnapShot.timeStamp && moment().isBefore(moment(portainerEnvironmentsSnapShot.timeStamp).add("1", "minutes"))) {
         return
     }
     try {
         await ensurePortainerApiToken()
+        await portainerApiAndJsonResponse({
+            path: `${portainerUrl}/api/endpoints/snapshot`,
+            token: await ensurePortainerApiToken(),
+            method: "POST",
+            body: {},
+        })
+        // if(!_.isEmpty(portainerEnvironmentsSnapShot?.envs)){
+        //     const envIds = Object.values(portainerEnvironmentsSnapShot?.envs).map((env)=> env.Id)
+        //     console.log('envIds', envIds)
+        //     await Promise.all(envIds.map((envId)=> portainerApiAndJsonResponse({
+        //         path: `${portainerUrl}/api/endpoints/${envId}/snapshot`,
+        //         token: portainerApiToken,
+        //         method: "POST",
+        //         body: {},
+        //     })))
+        // }
         const snapShot: any = await portainerApiAndJsonResponse({
             path: `${portainerUrl}/api/endpoints`,
-            token: portainerApiToken,
+            token: await ensurePortainerApiToken(),
             method: "GET",
             body: {},
         })
+
         portainerEnvironmentsSnapShot.timeStamp = moment().toISOString()
         snapShot.forEach((env) => {
             portainerEnvironmentsSnapShot.envs[env.Name] = {
@@ -98,6 +118,38 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
                 timeStamp: portainerEnvironmentsSnapShot.timeStamp,
             }
         })
+
+        const envsMap = Object.keys(portainerEnvironmentsSnapShot?.envs).map((envKey) => {
+            return {
+                envKey,
+                envId: portainerEnvironmentsSnapShot?.envs[envKey].Id,
+            }
+        })
+
+        await Promise.all(
+            envsMap.map(async (env) => {
+                const result: any =
+                    (await portainerApiAndJsonResponse({
+                        // path: `${portainerUrl}/api/endpoints/${envId}/edge/stacks`,
+                        path: `${portainerUrl}/api/stacks?filters=%7B"EndpointID":${env.envId},"IncludeOrphanedStacks":true%7D`,
+                        token: await ensurePortainerApiToken(),
+                        method: "GET",
+                        body: {},
+                    })) || []
+
+                const discoverStacks: any = {}
+                result.forEach((stack) => {
+                    discoverStacks[`${stack.Name}`] = stack
+                })
+
+                _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].discoverStacks`, discoverStacks)
+
+                return {
+                    envKey: env.envKey,
+                    stacks: result,
+                }
+            })
+        )
         await fs.writeFile(`${portainerWrapperTmpFolderPath}/portainerEnvironmentsSnapShot.json`, JSON.stringify(portainerEnvironmentsSnapShot, null, 4), "utf8")
         return snapShot
     } catch (err) {
@@ -106,20 +158,20 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
 }
 
 portainerExpressMiddleware.post("/snapshotEnvs", async (req, res) => {
-    const snapShot = await ensuePortainerSnapShotEnvs()
+    const body = req.body || {}
+    const snapShot = await ensuePortainerSnapShotEnvs(!!body?.forceFetch)
     // portainerEnvironmentsSnapShot.envsList = snapShot
     res.json(portainerEnvironmentsSnapShot)
 })
 
 export const ensueInfisicalProjectsSnapShot = async (force = false) => {
-    if (!force && infisicalProjectsSnapShot.timeStamp && moment().isBefore(moment(infisicalProjectsSnapShot.timeStamp).add('5', 'minutes'))) {
+    if (!force && infisicalProjectsSnapShot.timeStamp && moment().isBefore(moment(infisicalProjectsSnapShot.timeStamp).add("5", "minutes"))) {
         return
     }
     try {
-        await ensureInfisicalApiToken()
         const snapShot: any = await infisicalApiAndJsonResponse({
             path: `${infisicalConfig.infisicalHostUrl}/api/v2/organizations/${infisicalConfig.infisicalOrganizationId}/workspaces`,
-            token: infisicalApiToken,
+            token: await ensureInfisicalApiToken(),
             method: "GET",
             body: {},
         })
@@ -151,56 +203,159 @@ portainerExpressMiddleware.post("/infisicalProjectsSnapShot", async (req, res) =
 })
 
 export const ensureCommonTemplatesSnapShot = async (force = false) => {
-
-    if (!force && commonTemplatesSnapShot.timeStamp && moment().isBefore(moment(commonTemplatesSnapShot.timeStamp).add('5', 'minutes'))) {
+    if (!force && commonTemplatesSnapShot.timeStamp && moment().isBefore(moment(commonTemplatesSnapShot.timeStamp).add("5", "minutes"))) {
         return
     }
     const commonTemplatesFolder = `${portainerWrapperFolder}/commonTemplates`
 
-
-    const files = await fs.readdir(commonTemplatesFolder);
-    const templatesFiles = files.filter(file => file.endsWith('.yaml') || file.endsWith('.yml'));
+    const files = await fs.readdir(commonTemplatesFolder)
+    const templatesFiles = files.filter((file) => file.endsWith(".yaml") || file.endsWith(".yml"))
     const templates = {}
 
     for (const templateFile of templatesFiles) {
-        const templateContent = await fs.readFile(`${commonTemplatesFolder}/${templateFile}`, 'utf8');
-        const templateObj: any = YAML.load(templateContent);
+        const templateContent = await fs.readFile(`${commonTemplatesFolder}/${templateFile}`, "utf8")
+        const templateObj: any = YAML.load(templateContent)
         const portainerWrapperMetadata = templateObj.portainerWrapperMetadata || {}
         delete templateObj.portainerWrapperMetadata
-        Object.keys(templateObj.services).forEach((key)=> {
+        Object.keys(templateObj.services).forEach((key) => {
             const service = templateObj.services[key]
             const labelsSet = new Set(service?.labels || [])
             labelsSet.add(`portainer_commonTemplates=${templateFile}`)
             service.labels = [...labelsSet]
         })
 
-        _.set(templates, `[${templateFile?.replace(/\./g, '__')}]`, {
+        _.set(templates, `[${templateFile?.replace(/\./g, "__")}]`, {
             fileName: templateFile,
             templateName: portainerWrapperMetadata?.name,
             portainerWrapperMetadata,
-            templateYaml: YAML.dump(templateObj, {})
+            templateYaml: YAML.dump(templateObj, {}),
         })
-
     }
-
 
     commonTemplatesSnapShot.timeStamp = moment().toISOString()
     commonTemplatesSnapShot.templates = templates
 
     await fs.writeFile(`${portainerWrapperTmpFolderPath}/commonTemplatesSnapShot.json`, JSON.stringify(commonTemplatesSnapShot, null, 4), "utf8")
 
-
     return commonTemplatesSnapShot
 }
 
-portainerExpressMiddleware.post("/commonTemplatesSnapShot", async (req, res) => {
+portainerExpressMiddleware.post("/commonTemplatesConfigAll", async (req, res) => {
+    await Promise.all([ensureCommonTemplatesSnapShot(), ensueInfisicalProjectsSnapShot(), ensuePortainerSnapShotEnvs()])
 
-    const snapShot = await ensureCommonTemplatesSnapShot()
-
-
-    res.json(commonTemplatesSnapShot)
-    // const snapShot = await ensueInfisicalProjectsSnapShot()
-    // // portainerEnvironmentsSnapShot.envsList = snapShot
-    // res.json(infisicalProjectsSnapShot)
+    res.json({
+        commonTemplatesSnapShot,
+        portainerEnvironmentsSnapShot,
+        infisicalProjectsSnapShot,
+    })
 })
 
+portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
+    const body = req.body
+    const selectedEnv = body?.selectedEnv
+    if (!selectedEnv) {
+        throw new Error(`selectedEnv is not exist`)
+    }
+
+    const selectedEnvObj = _.get(portainerEnvironmentsSnapShot, `envs['${selectedEnv}']`, {})
+    if (_.isEmpty(selectedEnvObj)) {
+        throw new Error(`selectedEnv is not present in portainer`)
+    }
+
+    const isStackAlreadyDeployed = body.isStackAlreadyDeployed
+
+    const templateKey = body?.templateKey
+    if (!templateKey) {
+        throw new Error(`templateKey is not exist`)
+    }
+    const template = _.get(commonTemplatesSnapShot, `templates[${templateKey}]`, {})
+    if (_.isEmpty(template)) {
+        throw new Error(`template not found`)
+    }
+
+    const portainerWrapperMetadata = template?.portainerWrapperMetadata
+    const infisicalEnv = portainerWrapperMetadata?.infisicalEnv || "live"
+
+    const infisicalProject = _.get(infisicalProjectsSnapShot, `projects[${selectedEnv}]`, {})
+    const commonTemplateProject = _.get(infisicalProjectsSnapShot, `projects['${`commonTemplates_${template.fileName}`}']`, {})
+
+    const [
+        //
+        infisicalPortainerEnv,
+        commonTemplateSecretEnv,
+    ] = await Promise.all([
+        infisicalClient.secrets().listSecrets({
+            environment: infisicalEnv,
+            projectId: infisicalProject.id,
+            expandSecretReferences: true,
+            includeImports: false,
+            recursive: false,
+        }),
+        infisicalClient.secrets().listSecrets({
+            environment: infisicalEnv,
+            projectId: commonTemplateProject.id,
+            expandSecretReferences: true,
+            includeImports: false,
+            recursive: false,
+        }),
+    ])
+
+    const portainerEnv: any = {}
+    ;(infisicalPortainerEnv?.secrets || [])?.forEach((secret) => {
+        portainerEnv[secret["secretKey"]] = secret["secretValue"]
+    })
+    const commonTemplateEnv: any = {}
+    ;(commonTemplateSecretEnv?.secrets || [])?.forEach((secret) => {
+        commonTemplateEnv[secret["secretKey"]] = secret["secretValue"]
+    })
+
+    template.key = templateKey
+    const templateYaml = template.templateYaml
+    const parsedTemplateYaml = nunjucks.renderString(templateYaml, {
+        processEnv: process.env,
+        portainerEnv,
+        commonTemplateEnv,
+    })
+
+    if (isStackAlreadyDeployed) {
+        const alreadyDeployedStackId = body.alreadyDeployedStackId
+        if (!alreadyDeployedStackId) {
+            throw new Error(`alreadyDeployedStackId is not exist`)
+        }
+        await portainerApiAndJsonResponse({
+            path: `${portainerUrl}/api/stacks/${alreadyDeployedStackId}?endpointId=${selectedEnvObj?.Id}`,
+            token: await ensurePortainerApiToken(),
+            method: "PUT",
+            body: {
+                Env: [],
+                Prune: false,
+                PullImage: true,
+                StackFileContent: parsedTemplateYaml,
+                id: alreadyDeployedStackId,
+            },
+        })
+    } else {
+        const stackName = body.stackName
+        if (!stackName) {
+            throw new Error(`stackName is not exist`)
+        }
+        await portainerApiAndJsonResponse({
+            path: `${portainerUrl}/api/stacks/create/standalone/string?endpointId=${selectedEnvObj?.Id}`,
+            token: await ensurePortainerApiToken(),
+            method: "POST",
+            body: {
+                Env: [],
+                Name: stackName,
+                StackFileContent: parsedTemplateYaml,
+                method: "string",
+                type: "standalone",
+            },
+        })
+    }
+
+    await Promise.all([ensureCommonTemplatesSnapShot(true), ensueInfisicalProjectsSnapShot(true), ensuePortainerSnapShotEnvs(true)])
+
+    res.json({
+        parsedTemplateYaml,
+    })
+})

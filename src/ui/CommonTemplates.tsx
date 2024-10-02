@@ -3,28 +3,35 @@ import { apiCallAndReturnJson, PortainerContext } from "./Portainer"
 import { Button, Flex, Table, Tag, Typography, Modal, Radio, Select } from "antd"
 import _ from "lodash"
 import { useImmer } from "use-immer"
+import DeployCommonTemplateModal from "../components/DeployCommonTemplateModal"
 const { Text } = Typography
 
 const CommonTemplates = () => {
     const { portainerState, setPortainerState } = useContext(PortainerContext)
 
-    const [apiDataState, setApiDataState] = useImmer({
-        data: {},
+    const [componentState, setComponentState] = useImmer({
+        commonTemplatesSnapShot: {},
+        portainerEnvironmentsSnapShot: {},
+        infisicalProjectsSnapShot: {},
+        deployCommonTemplateModal: {
+            isModalOpen: false,
+        },
     })
 
     useEffect(() => {
         ;(async () => {
-            const res = await apiCallAndReturnJson("commonTemplatesSnapShot", {
+            const res = await apiCallAndReturnJson("commonTemplatesConfigAll", {
                 method: "POST",
             })
-            setApiDataState((draft) => {
-                draft.data = res
+            setComponentState((draft) => {
+                draft.commonTemplatesSnapShot = res.commonTemplatesSnapShot
+                draft.portainerEnvironmentsSnapShot = res.portainerEnvironmentsSnapShot
+                draft.infisicalProjectsSnapShot = res.infisicalProjectsSnapShot
             })
         })()
     }, [])
 
-    const templates = apiDataState?.data?.templates || {}
-
+    const templates = componentState?.commonTemplatesSnapShot?.templates || {}
 
     return (
         <Flex gap="middle" vertical>
@@ -48,17 +55,28 @@ const CommonTemplates = () => {
                         align: "center" as const,
                     },
                     {
+                        title: "stackName",
+                        align: "center" as const,
+                        render: (row) => {
+                            return <p>{row?.portainerWrapperMetadata?.stackName}</p>
+                        },
+                    },
+                    {
                         title: "Actions",
                         align: "center" as const,
                         render: (row) => {
                             return (
-                                <></>
-                                // <Button
-                                //     onClick={async () => {
-                                //         window.open(`${portainerState?.config?.infisicalUrl}/project/${row.id}/secrets/overview`, "_blank")
-                                //     }}>
-                                //     Open Project
-                                // </Button>
+                                <>
+                                    <Button
+                                        onClick={() => {
+                                            setComponentState((draft) => {
+                                                draft.deployCommonTemplateModal.isModalOpen = true
+                                                draft.deployCommonTemplateModal.templateKey = row.key
+                                            })
+                                        }}>
+                                        Deploy
+                                    </Button>
+                                </>
                             )
                         },
                     },
@@ -66,7 +84,13 @@ const CommonTemplates = () => {
                 // pagination={true}
                 loading={Object.keys(templates)?.length == 0}
                 //@ts-ignore
-                dataSource={(Object.values(templates) || []).map((record) => ({ ...record, key: record.id }))}
+                dataSource={(Object.keys(templates) || []).map((key) => {
+                    const record = {
+                        key,
+                        ...templates[key],
+                    }
+                    return { ...record }
+                })}
                 pagination={{ pageSize: 15 }}
                 // scroll={{ y: 240 }}
                 sticky={{ offsetHeader: 5 }}
@@ -90,6 +114,13 @@ const CommonTemplates = () => {
                     },
                     fixed: "left",
                 }}
+            />
+
+            <DeployCommonTemplateModal
+                portainerState={portainerState}
+                setPortainerState={setPortainerState}
+                componentState={componentState}
+                setComponentState={setComponentState}
             />
         </Flex>
     )

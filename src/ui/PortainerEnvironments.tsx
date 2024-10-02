@@ -3,6 +3,7 @@ import { apiCallAndReturnJson, PortainerContext } from "./Portainer"
 import { Button, Flex, Table, Tag, Typography, Modal, Radio, Select } from "antd"
 import _ from "lodash"
 import { useImmer } from "use-immer"
+import moment from "moment-timezone"
 const { Text } = Typography
 
 const PortainerEnvironments = () => {
@@ -16,6 +17,9 @@ const PortainerEnvironments = () => {
         ;(async () => {
             const res = await apiCallAndReturnJson("snapshotEnvs", {
                 method: "POST",
+                body: JSON.stringify({
+                    forceFetch: true
+                })
             })
             setEnvs((draft) => {
                 draft.data = res
@@ -83,6 +87,11 @@ const PortainerEnvironments = () => {
                         render: (row) => <p>{_.get(row, "Snapshots[0].ContainerCount", "NA")}</p>,
                     },
                     {
+                        title: "Snapshot time",
+                        align: "center" as const,
+                        render: (row) => <p>{moment.unix(_.get(row, "Snapshots[0].Time", null)).tz("America/New_York").format("MM-DD HH:mm")}</p>,
+                    },
+                    {
                         title: "Manged by Portainer Containers",
                         align: "center" as const,
                         render: (row) => {
@@ -148,6 +157,9 @@ const PortainerEnvironments = () => {
                         title: "Traefik",
                         align: "center" as const,
                         render: (row) => {
+                            if(row?.Name== 'AMZ_SELLER_OF_225989358724'){
+                                console.log(row)
+                            }
                             const snapShotEnv = _.get(row, "Snapshots[0]", {})
                             const Containers = _.get(snapShotEnv, "DockerSnapshotRaw.Containers", [])
                             let traefikContainer = {}
