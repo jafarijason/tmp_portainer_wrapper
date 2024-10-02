@@ -1,3 +1,5 @@
+import React from "react"
+
 import { Button, Checkbox, Radio, Form, Input, Modal, Select } from "antd"
 import { apiCallAndReturnJson } from "../ui/Portainer"
 import _ from "lodash"
@@ -102,7 +104,7 @@ const DeployCommonTemplateModal = ({ portainerState, setPortainerState, componen
                                         templateKey: template.key,
                                         isStackAlreadyDeployed: isStackAlreadyDeployed,
                                         ...(alreadyDeployedStackId ? { alreadyDeployedStackId } : {}),
-                                        stackName
+                                        stackName,
                                     }),
                                 })
                                 onReset()
