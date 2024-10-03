@@ -386,8 +386,8 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
         })(),
     ])
 
-    console.log(infisicalPortainerEnv,
-        commonTemplateSecretEnv,)
+    // console.log(infisicalPortainerEnv,
+    //     commonTemplateSecretEnv,)
 
     const portainerEnv: any = {};
     (infisicalPortainerEnv?.secrets || [])?.forEach((secret) => {
