@@ -112,8 +112,12 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
 
         portainerEnvironmentsSnapShot.timeStamp = moment().toISOString()
         snapShot.forEach((env) => {
+            const isSwarm = _.get(env, "Snapshots[0].Swarm", false)
+            const isStandAlone = !isSwarm
             portainerEnvironmentsSnapShot.envs[env.Name] = {
                 ...env,
+                isSwarm,
+                isStandAlone,
                 timeStamp: portainerEnvironmentsSnapShot.timeStamp,
             }
         })
@@ -196,7 +200,22 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
                         discoverContainers[`${container.Id}`] = container
                     })
 
+                    const portainerManageContainer = {};
+                    Object.keys(discoverContainers).forEach((containerId) => {
+                        const container = discoverContainers[containerId]
+                        if (container.State != "running") {
+                            return
+                        }
+                        if (container.Labels["portainer_serviceName"]) {
+                            portainerManageContainer[container?.Id] = {
+                                name: container.Labels["portainer_serviceName"],
+                                ...container,
+                            }
+                        }
+                    })
+
                     _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].discoverContainers`, discoverContainers)
+                    _.set(portainerEnvironmentsSnapShot, `envs['${env.envKey}'].portainerManageContainer`, portainerManageContainer)
                 } catch (err) {
                     console.log("Error discoverContainers", env, err)
                 }
@@ -353,13 +372,13 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
     ])
 
     const portainerEnv: any = {}
-    ;(infisicalPortainerEnv?.secrets || [])?.forEach((secret) => {
-        portainerEnv[secret["secretKey"]] = secret["secretValue"]
-    })
+        ; (infisicalPortainerEnv?.secrets || [])?.forEach((secret) => {
+            portainerEnv[secret["secretKey"]] = secret["secretValue"]
+        })
     const commonTemplateEnv: any = {}
-    ;(commonTemplateSecretEnv?.secrets || [])?.forEach((secret) => {
-        commonTemplateEnv[secret["secretKey"]] = secret["secretValue"]
-    })
+        ; (commonTemplateSecretEnv?.secrets || [])?.forEach((secret) => {
+            commonTemplateEnv[secret["secretKey"]] = secret["secretValue"]
+        })
 
     template.key = templateKey
     const templateYaml = template.templateYaml

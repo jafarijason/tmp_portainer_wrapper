@@ -39,6 +39,9 @@ const DeployCommonTemplateModal = ({ portainerState, setPortainerState, componen
             key,
             ...envs[key],
         }
+        if (environment.isSwarm) {
+            return
+        }
 
         const deployedStack = _.get(environment, `discoverStacks['${stackName}']`, {})
         const isStackAlreadyDeployed = !_.isEmpty(deployedStack)

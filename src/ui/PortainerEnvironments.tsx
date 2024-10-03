@@ -18,8 +18,8 @@ const PortainerEnvironments = () => {
             const res = await apiCallAndReturnJson("snapshotEnvs", {
                 method: "POST",
                 body: JSON.stringify({
-                    forceFetch: true
-                })
+                    forceFetch: true,
+                }),
             })
             setEnvs((draft) => {
                 draft.data = res
@@ -42,27 +42,31 @@ const PortainerEnvironments = () => {
                         title: "Id",
                         dataIndex: "Id",
                         align: "center" as const,
+                        width: 1,
                     },
                     {
                         title: "Name",
                         dataIndex: "Name",
                         align: "center" as const,
+                        width: 1,
                     },
                     {
                         title: "Type",
                         align: "center" as const,
+                        width: 1,
                         render: (row) => {
-                            const isSwarm = _.get(row, "Snapshots[0].Swarm", false)
+                            const isSwarm = row.isSwarm
                             if (isSwarm) {
-                                return <p>Swarm</p>
+                                return <p>swarm</p>
                             }
 
-                            return <p>Docker Stand alone</p>
+                            return <p>standalone</p>
                         },
                     },
                     {
                         title: "Meta Data",
                         align: "center" as const,
+                        width: 1,
                         render: (row) => {
                             const MetaData = _.cloneDeep(_.get(row, "Snapshots[0]", {}))
                             delete MetaData.Time
@@ -70,7 +74,7 @@ const PortainerEnvironments = () => {
                             delete MetaData.GpuUseList
 
                             return (
-                                <div style={{ textAlign: "left" }}>
+                                <div style={{ textAlign: "left", fontSize: "10px" }}>
                                     {Object.entries(MetaData).map(([key, value], index) => (
                                         <div key={`${row.Id}_${index}_${key}`}>
                                             {key}: {String(value)}
@@ -84,35 +88,28 @@ const PortainerEnvironments = () => {
                     {
                         title: "Number of Containers",
                         align: "center" as const,
+                        width: 1,
                         render: (row) => <p>{_.get(row, "Snapshots[0].ContainerCount", "NA")}</p>,
                     },
                     {
                         title: "Snapshot time",
                         align: "center" as const,
-                        render: (row) => <p>{moment.unix(_.get(row, "Snapshots[0].Time", null)).tz("America/New_York").format("MM-DD HH:mm")}</p>,
+                        width: 1,
+                        render: (row) => (
+                            <p>
+                                {moment
+                                    .unix(_.get(row, "Snapshots[0].Time", null))
+                                    .tz("America/New_York")
+                                    .format("MM-DD HH:mm")}
+                            </p>
+                        ),
                     },
                     {
                         title: "Manged by Portainer Containers",
                         align: "center" as const,
+                        width: 2,
                         render: (row) => {
-                            const snapShotEnv = _.get(row, "Snapshots[0]", {})
-                            const Containers = _.get(snapShotEnv, "DockerSnapshotRaw.Containers", [])
-                            let portainerManageContainer = {}
-                            Containers.forEach((container) => {
-                                if (container.State != "running") {
-                                    return
-                                }
-                                // const portainerManagedContainerIndex = Object.keys(container?.Labels || {}).findIndex((label) => label.startsWith("portainer_serviceName"))
-                                // if (portainerManagedContainerIndex < 0) {
-                                //     return
-                                // }
-                                if (container.Labels["portainer_serviceName"]) {
-                                    portainerManageContainer[container?.Id] = {
-                                        name: container.Labels["portainer_serviceName"],
-                                        ...container,
-                                    }
-                                }
-                            })
+                            const portainerManageContainer = row?.portainerManageContainer || {}
 
                             return (
                                 <div style={{ textAlign: "left" }}>
@@ -131,6 +128,8 @@ const PortainerEnvironments = () => {
                                                 <a href={`${portainerState?.config?.portainerUrl}/#!/${row.Id}/docker/containers/${value.Id}/exec`} target="_blank">
                                                     shell
                                                 </a>
+                                                {" - "}
+                                                Status: {value.Status}
                                             </div>
                                         )
                                     })}
@@ -141,13 +140,11 @@ const PortainerEnvironments = () => {
                     {
                         title: "Portainer",
                         align: "center" as const,
+                        width: 1,
                         render: (row) => (
                             <Button
                                 onClick={async () => {
                                     window.open(`${portainerState?.config?.portainerUrl}/#!/${row.Id}/docker/dashboard`, "_blank")
-                                    // await actions.impersonate({
-                                    //     userId: row.id,
-                                    // })
                                 }}>
                                 Open Dashboard
                             </Button>
@@ -155,18 +152,13 @@ const PortainerEnvironments = () => {
                     },
                     {
                         title: "Traefik",
+                        width: 1,
                         align: "center" as const,
                         render: (row) => {
-                            if(row?.Name== 'AMZ_SELLER_OF_225989358724'){
-                                console.log(row)
-                            }
-                            const snapShotEnv = _.get(row, "Snapshots[0]", {})
-                            const Containers = _.get(snapShotEnv, "DockerSnapshotRaw.Containers", [])
+                            const portainerManageContainer = row?.portainerManageContainer || {}
                             let traefikContainer = {}
-                            Containers.forEach((container) => {
-                                if (container.State != "running") {
-                                    return
-                                }
+                            Object.keys(portainerManageContainer).forEach((containerId) => {
+                                const container = portainerManageContainer[containerId]
                                 if (traefikContainer?.Id) {
                                     return
                                 }

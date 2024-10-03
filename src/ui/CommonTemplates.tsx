@@ -55,6 +55,13 @@ const CommonTemplates = () => {
                         align: "center" as const,
                     },
                     {
+                        title: "Type",
+                        align: "center" as const,
+                        render: (row) => {
+                            return <p>{row?.portainerWrapperMetadata?.containerEnvType}</p>
+                        },
+                    },
+                    {
                         title: "stackName",
                         align: "center" as const,
                         render: (row) => {
