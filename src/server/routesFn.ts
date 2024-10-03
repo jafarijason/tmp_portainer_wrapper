@@ -355,30 +355,48 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
         infisicalPortainerEnv,
         commonTemplateSecretEnv,
     ] = await Promise.all([
-        infisicalClient.secrets().listSecrets({
-            environment: infisicalEnv,
-            projectId: infisicalProject.id,
-            expandSecretReferences: true,
-            includeImports: false,
-            recursive: false,
-        }),
-        infisicalClient.secrets().listSecrets({
-            environment: infisicalEnv,
-            projectId: commonTemplateProject.id,
-            expandSecretReferences: true,
-            includeImports: false,
-            recursive: false,
-        }),
+        (async () => {
+            try {
+                return await infisicalClient.secrets().listSecrets({
+                    environment: infisicalEnv,
+                    projectId: infisicalProject.id,
+                    expandSecretReferences: true,
+                    includeImports: false,
+                    recursive: false,
+                })
+            } catch (err) {
+                console.log('Error infisicalPortainerEnv', err)
+                return { secrets: [] }
+            }
+        })(),
+        (async () => {
+            try {
+                return await infisicalClient.secrets().listSecrets({
+                    environment: infisicalEnv,
+                    projectId: commonTemplateProject.id,
+                    expandSecretReferences: true,
+                    includeImports: false,
+                    recursive: false,
+                })
+            }
+            catch (err) {
+                console.log('Error commonTemplateSecretEnv', err)
+                return { secrets: [] }
+            }
+        })(),
     ])
 
-    const portainerEnv: any = {}
-        ; (infisicalPortainerEnv?.secrets || [])?.forEach((secret) => {
-            portainerEnv[secret["secretKey"]] = secret["secretValue"]
-        })
-    const commonTemplateEnv: any = {}
-        ; (commonTemplateSecretEnv?.secrets || [])?.forEach((secret) => {
-            commonTemplateEnv[secret["secretKey"]] = secret["secretValue"]
-        })
+    console.log(infisicalPortainerEnv,
+        commonTemplateSecretEnv,)
+
+    const portainerEnv: any = {};
+    (infisicalPortainerEnv?.secrets || [])?.forEach((secret) => {
+        portainerEnv[secret["secretKey"]] = secret["secretValue"]
+    })
+    const commonTemplateEnv: any = {};
+    (commonTemplateSecretEnv?.secrets || [])?.forEach((secret) => {
+        commonTemplateEnv[secret["secretKey"]] = secret["secretValue"]
+    })
 
     template.key = templateKey
     const templateYaml = template.templateYaml

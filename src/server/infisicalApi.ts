@@ -7,22 +7,26 @@ export const infisicalApiAndJsonResponse = async ({
     body = {}
 }) => {
 
-    const responseRaw = await fetch(
-        //
-        path,
-        {
-            method: method,
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-            ...(method != 'GET' ? { body: JSON.stringify(body) } : {}),
-        });
+    try {
+        const responseRaw = await fetch(
+            //
+            path,
+            {
+                method: method,
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                ...(method != 'GET' ? { body: JSON.stringify(body) } : {}),
+            });
 
-    if (!responseRaw.ok) {
-        throw new Error(`Failed  `)
+        if (!responseRaw.ok) {
+            throw new Error(`Failed  `)
+        }
+        const response = await responseRaw.json()
+
+        return response
+    } catch (err) {
+        console.log("Error infisicalApiAndJsonResponse", err)
     }
-    const response = await responseRaw.json()
-
-    return response
 }
