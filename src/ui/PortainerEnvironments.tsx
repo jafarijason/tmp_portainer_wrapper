@@ -82,7 +82,36 @@ const PortainerEnvironments = () => {
                                     ))}
                                 </div>
                             )
-                            return <p>{JSON.stringify(MetaData)}</p>
+                        },
+                    },
+                    {
+                        title: "Portainer Meta Data",
+                        align: "center" as const,
+                        width: 2,
+                        render: (row) => {
+                            return (
+                                <div style={{ textAlign: "left", fontSize: "10px" }}>
+                                    {Object.entries(row.tagToMetadataObj || {}).map(([key, value], index) => (
+                                        <div key={`${row.Id}_${index}_${key}`}>
+                                            {key}: {String(value)}
+                                        </div>
+                                    ))}
+                                </div>
+                            )
+                        },
+                    },
+                    {
+                        title: "Portainer Tags",
+                        align: "center" as const,
+                        width: 1,
+                        render: (row) => {
+                            return (
+                                <div style={{ textAlign: "left", fontSize: "10px" }}>
+                                    {(row.portainerTags || []).map((tag, index) => (
+                                        <div key={`${row.Id}_${index}_${tag}`}>{tag}</div>
+                                    ))}
+                                </div>
+                            )
                         },
                     },
                     {

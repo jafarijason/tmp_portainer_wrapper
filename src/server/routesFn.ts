@@ -109,6 +109,8 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
             method: "GET",
             body: {},
         })
+        portainerEnvironmentsSnapShot.envIdMaps = {}
+
 
         portainerEnvironmentsSnapShot.timeStamp = moment().toISOString()
         snapShot.forEach((env) => {
@@ -118,8 +120,12 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
                 ...env,
                 isSwarm,
                 isStandAlone,
+                portainerTags: [],
+                tagToMetadataObj: {},
                 timeStamp: portainerEnvironmentsSnapShot.timeStamp,
             }
+
+            portainerEnvironmentsSnapShot.envIdMaps[env.Id] = env.Name
         })
 
         const envsMap = Object.keys(portainerEnvironmentsSnapShot?.envs).map((envKey) => {
@@ -221,6 +227,44 @@ export const ensuePortainerSnapShotEnvs = async (force = false) => {
                 }
             })
         )
+
+        {
+
+            const tags: any = await portainerApiAndJsonResponse({
+                path: `${portainerUrl}/api/tags`,
+                token: await ensurePortainerApiToken(),
+                method: "GET",
+                body: {},
+            }) || []
+            const tagsObj = {}
+            tags.forEach((tag) => {
+                const tagEnvs = Object.keys((tag?.Endpoints || {})).filter((envId) => !!tag?.Endpoints[envId]).map(envId => envId)
+                const tagToMetadata = tag?.Name?.split('__')
+                tag.tagToMetadataObj = {}
+                if (tagToMetadata?.length == 2) {
+                    tag.tagToMetadataObj[tagToMetadata[0]] = tagToMetadata[1]
+                }
+                tag.tagEnvs = tagEnvs
+                tagsObj[tag.Name] = tag
+                tagEnvs.forEach((envId) => {
+                    const envKey = portainerEnvironmentsSnapShot.envIdMaps[envId]
+                    const env = portainerEnvironmentsSnapShot.envs[envKey]
+                    if (tagToMetadata?.length == 2) {
+                        env.tagToMetadataObj = {
+                            ...env.tagToMetadataObj,
+                            ...tag.tagToMetadataObj
+                        }
+                    } else {
+                        env.portainerTags.push(tag.Name)
+                    }
+
+                })
+            })
+            _.set(portainerEnvironmentsSnapShot, 'tagsObj', tagsObj)
+        }
+
+
+
         await fs.writeFile(`${portainerWrapperTmpFolderPath}/portainerEnvironmentsSnapShot.json`, JSON.stringify(portainerEnvironmentsSnapShot, null, 4), "utf8")
         return snapShot
     } catch (err) {
@@ -312,7 +356,11 @@ export const ensureCommonTemplatesSnapShot = async (force = false) => {
 }
 
 portainerExpressMiddleware.post("/commonTemplatesConfigAll", async (req, res) => {
-    await Promise.all([ensureCommonTemplatesSnapShot(), ensueInfisicalProjectsSnapShot(), ensuePortainerSnapShotEnvs()])
+    await Promise.all([
+        ensureCommonTemplatesSnapShot(),
+        ensueInfisicalProjectsSnapShot(),
+        ensuePortainerSnapShotEnvs()
+    ])
 
     res.json({
         commonTemplatesSnapShot,
@@ -442,7 +490,12 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
         })
     }
 
-    await Promise.all([ensureCommonTemplatesSnapShot(true), ensueInfisicalProjectsSnapShot(true), ensuePortainerSnapShotEnvs(true)])
+    await Promise.all([
+        //
+        ensureCommonTemplatesSnapShot(true),
+        ensueInfisicalProjectsSnapShot(true),
+        ensuePortainerSnapShotEnvs(true)
+    ])
 
     res.json({
         parsedTemplateYaml,
