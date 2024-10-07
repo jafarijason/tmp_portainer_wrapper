@@ -1,12 +1,18 @@
-import { Router } from "express"
 import fetch from "node-fetch"
 import jwt from "jsonwebtoken"
 import fs, { createWriteStream, createReadStream } from "fs-extra"
+import * as YAML from "js-yaml"
+import _ from "lodash"
 
 import path from "path"
 import AWS from "aws-sdk"
 import moment from "moment"
-import { ensueInfisicalProjectsSnapShot, ensuePortainerSnapShotEnvs, ensureCommonTemplatesSnapShot, portainerExpressMiddleware } from "./routesFn"
+import {
+    //
+    ensueInfisicalProjectsSnapShot,
+    ensuePortainerSnapShotEnvs,
+    portainerExpressMiddleware
+} from "./routesFn"
 import { InfisicalSDK, ApiClient } from "@infisical/sdk"
 
 interface S3BackupConfig {
@@ -35,7 +41,9 @@ interface PortainerWrapperConfig {
     s3BackupConfig?: S3BackupConfig
     refreshApiTokenIntervalSec?: number
     portainerWrapperFolder: string
+    portainerWrapperTmpFolderPath?: string
     infisicalConfig?: InfisicalConfig
+    forceEnsureSnapShots: boolean
 }
 
 export let portainerUrl = ""
@@ -185,7 +193,7 @@ export const ensurePortainerApiToken = async () => {
 }
 
 
-const ensurePortainerSnapShotsOnFs = async () => {
+export const ensurePortainerSnapShotsOnFs = async () => {
     try {
 
         const portainerEnvironmentsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/portainerEnvironmentsSnapShot.json`)) || {}
@@ -204,7 +212,7 @@ const ensurePortainerSnapShotsOnFs = async () => {
     }
 }
 
-const ensureInfisicalProjectsSnapShotOnFs = async () => {
+export const ensureInfisicalProjectsSnapShotOnFs = async () => {
 
     try {
         const infisicalProjectsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/infisicalProjectsSnapShot.json`)) || {}
@@ -222,13 +230,52 @@ const ensureInfisicalProjectsSnapShotOnFs = async () => {
     }
 }
 
+export const ensureCommonTemplatesSnapShot = async (force = false) => {
+    if (!force && commonTemplatesSnapShot.timeStamp && moment().isBefore(moment(commonTemplatesSnapShot.timeStamp).add("5", "minutes"))) {
+        return
+    }
+    const commonTemplatesFolder = `${portainerWrapperFolder}/commonTemplates`
+
+    const files = await fs.readdir(commonTemplatesFolder)
+    const templatesFiles = files.filter((file) => file.endsWith(".yaml") || file.endsWith(".yml"))
+    const templates = {}
+
+    for (const templateFile of templatesFiles) {
+        const templateContent = await fs.readFile(`${commonTemplatesFolder}/${templateFile}`, "utf8")
+        const templateObj: any = YAML.load(templateContent)
+        const portainerWrapperMetadata = templateObj.portainerWrapperMetadata || {}
+        delete templateObj.portainerWrapperMetadata
+        Object.keys(templateObj.services).forEach((key) => {
+            const service = templateObj.services[key]
+            const labelsSet = new Set(service?.labels || [])
+            labelsSet.add(`portainer_commonTemplates=${templateFile}`)
+            service.labels = [...labelsSet]
+        })
+
+        _.set(templates, `[${templateFile?.replace(/\./g, "__")}]`, {
+            fileName: templateFile,
+            templateName: portainerWrapperMetadata?.name,
+            portainerWrapperMetadata,
+            templateYaml: YAML.dump(templateObj, {}),
+        })
+    }
+
+    commonTemplatesSnapShot.timeStamp = moment().toISOString()
+    commonTemplatesSnapShot.templates = templates
+
+    await fs.writeFile(`${portainerWrapperTmpFolderPath}/commonTemplatesSnapShot.json`, JSON.stringify(commonTemplatesSnapShot, null, 4), "utf8")
+
+    return commonTemplatesSnapShot
+}
+
+
 export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig) => {
     portainerUrl = config.portainerUrl
     portainerUserName = config.portainerUserName
     portainerPassword = config.portainerPassword
     portainerWrapperFolder = config.portainerWrapperFolder
 
-    portainerWrapperTmpFolderPath = `${portainerWrapperFolder}/.~tmp`
+    portainerWrapperTmpFolderPath = config.portainerWrapperTmpFolderPath || `${portainerWrapperFolder}/.~tmp`
 
     if (!fs.existsSync(portainerWrapperTmpFolderPath)) {
         fs.mkdirSync(portainerWrapperTmpFolderPath, { recursive: true })
@@ -238,32 +285,41 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
         s3BackupConfig = config?.s3BackupConfig
         configureS3Client(config.s3BackupConfig)
     }
+
     if (config?.infisicalConfig?.infisicalClientId) {
         infisicalConfig = config?.infisicalConfig
         configureInfisicalClient(config?.infisicalConfig);
 
-        (async () => {
-            await ensureInfisicalApiToken()
-        })()
+        if (config?.forceEnsureSnapShots) {
 
-        if (infisicalConfig.refreshApiTokenIntervalSec > 0) {
-            setInterval(async () => {
-                try {
-                    await ensureInfisicalApiToken()
-                } catch (err) {
-                    //
-                }
-            }, infisicalConfig.refreshApiTokenIntervalSec)
+            (async () => {
+                await ensureInfisicalApiToken()
+            })()
+            if (infisicalConfig.refreshApiTokenIntervalSec > 0) {
+                setInterval(async () => {
+                    try {
+                        await ensureInfisicalApiToken()
+                    } catch (err) {
+                        //
+                    }
+                }, infisicalConfig.refreshApiTokenIntervalSec)
+            }
+
+            ensureInfisicalProjectsSnapShotOnFs();
+
+            ensureCommonTemplatesSnapShot(true);
         }
 
-        ensureInfisicalProjectsSnapShotOnFs();
 
-        ensureCommonTemplatesSnapShot(true);
 
     };
 
+    if (config?.forceEnsureSnapShots) {
 
-    ensurePortainerSnapShotsOnFs();
+        ensurePortainerSnapShotsOnFs();
+    }
+
+
 
 
 

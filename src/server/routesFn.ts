@@ -12,6 +12,7 @@ import {
     portainerWrapperFolder,
     commonTemplatesSnapShot,
     infisicalClient,
+    ensureCommonTemplatesSnapShot,
 } from "./portainerExpressMiddleware"
 import { UnprocessableEntityException } from "@nestjs/common"
 import { pipeline } from "stream"
@@ -36,46 +37,52 @@ portainerExpressMiddleware.get("/test", (req, res) => {
     res.send("Test endpoint is working!")
 })
 
-portainerExpressMiddleware.post("/backup", async (req, res) => {
+
+export const backUpPortainer = async () => {
     const isoTimeStamp = moment().toISOString()
+    if (!s3BackupConfig?.accessKey) {
+        throw new UnprocessableEntityException("s3 backup did not specified")
+    }
+    await ensurePortainerApiToken()
+
+    // Path to save the tar.gz file
+    const backupFilePath = `${portainerWrapperTmpFolderPath}/${isoTimeStamp}_encrypt.tar.gz`
+
+    const backupResponse = await fetch(`${portainerUrl}/api/backup`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${await ensurePortainerApiToken()}`,
+        },
+        body: JSON.stringify({
+            password: s3BackupConfig.backupPassword || "",
+        }),
+    })
+
+    if (!backupResponse.ok) {
+        throw new Error(`Failed to create backup ${backupResponse.statusText}`)
+    }
+
+    // Stream the backup content into a tar.gz file
+    const backupFileStream = fs.createWriteStream(backupFilePath)
+    await pipelineAsync(backupResponse.body, backupFileStream)
+
+    // Upload the tar.gz file to S3
+    const uploadResult = await uploadToS3(backupFilePath, s3BackupConfig)
+    const s3FileUrl = uploadResult.Location
+
+    await fs.unlink(backupFilePath)
+
+    return {
+        s3FileUrl,
+        isoTimeStamp
+    }
+
+}
+
+portainerExpressMiddleware.post("/backup", async (req, res) => {
     try {
-        if (!s3BackupConfig?.accessKey) {
-            throw new UnprocessableEntityException("s3 backup did not specified")
-        }
-        await ensurePortainerApiToken()
-
-        // Path to save the tar.gz file
-        const backupFilePath = `${portainerWrapperTmpFolderPath}/${isoTimeStamp}_encrypt.tar.gz`
-
-        const backupResponse = await fetch(`${portainerUrl}/api/backup`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${await ensurePortainerApiToken()}`,
-            },
-            body: JSON.stringify({
-                password: s3BackupConfig.backupPassword || "",
-            }),
-        })
-
-        if (!backupResponse.ok) {
-            return res.status(backupResponse.status).json({
-                message: "Failed to create backup",
-                status: backupResponse.statusText,
-            })
-        }
-
-        // Stream the backup content into a tar.gz file
-        const backupFileStream = fs.createWriteStream(backupFilePath)
-        await pipelineAsync(backupResponse.body, backupFileStream)
-
-        // Upload the tar.gz file to S3
-        const uploadResult = await uploadToS3(backupFilePath, s3BackupConfig)
-        const s3FileUrl = uploadResult.Location
-
-        await fs.unlink(backupFilePath)
-
-        // Respond with the S3 file URL
+        const { s3FileUrl, isoTimeStamp } = await backUpPortainer()
         res.status(200).json({ message: "Backup stored in S3", fileUrl: s3FileUrl, isoTimeStamp })
     } catch (error) {
         res.status(500).json({ message: "Error creating or storing backup", error })
@@ -317,43 +324,6 @@ portainerExpressMiddleware.post("/infisicalProjectsSnapShot", async (req, res) =
     res.json(infisicalProjectsSnapShot)
 })
 
-export const ensureCommonTemplatesSnapShot = async (force = false) => {
-    if (!force && commonTemplatesSnapShot.timeStamp && moment().isBefore(moment(commonTemplatesSnapShot.timeStamp).add("5", "minutes"))) {
-        return
-    }
-    const commonTemplatesFolder = `${portainerWrapperFolder}/commonTemplates`
-
-    const files = await fs.readdir(commonTemplatesFolder)
-    const templatesFiles = files.filter((file) => file.endsWith(".yaml") || file.endsWith(".yml"))
-    const templates = {}
-
-    for (const templateFile of templatesFiles) {
-        const templateContent = await fs.readFile(`${commonTemplatesFolder}/${templateFile}`, "utf8")
-        const templateObj: any = YAML.load(templateContent)
-        const portainerWrapperMetadata = templateObj.portainerWrapperMetadata || {}
-        delete templateObj.portainerWrapperMetadata
-        Object.keys(templateObj.services).forEach((key) => {
-            const service = templateObj.services[key]
-            const labelsSet = new Set(service?.labels || [])
-            labelsSet.add(`portainer_commonTemplates=${templateFile}`)
-            service.labels = [...labelsSet]
-        })
-
-        _.set(templates, `[${templateFile?.replace(/\./g, "__")}]`, {
-            fileName: templateFile,
-            templateName: portainerWrapperMetadata?.name,
-            portainerWrapperMetadata,
-            templateYaml: YAML.dump(templateObj, {}),
-        })
-    }
-
-    commonTemplatesSnapShot.timeStamp = moment().toISOString()
-    commonTemplatesSnapShot.templates = templates
-
-    await fs.writeFile(`${portainerWrapperTmpFolderPath}/commonTemplatesSnapShot.json`, JSON.stringify(commonTemplatesSnapShot, null, 4), "utf8")
-
-    return commonTemplatesSnapShot
-}
 
 portainerExpressMiddleware.post("/commonTemplatesConfigAll", async (req, res) => {
     await Promise.all([
