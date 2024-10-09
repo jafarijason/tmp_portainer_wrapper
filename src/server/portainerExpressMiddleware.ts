@@ -193,11 +193,11 @@ export const ensurePortainerApiToken = async () => {
 }
 
 
-export const ensurePortainerSnapShotsOnFs = async () => {
+export const ensurePortainerSnapShotsOnFs = async (force = false) => {
     try {
 
         const portainerEnvironmentsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/portainerEnvironmentsSnapShot.json`)) || {}
-        if (portainerEnvironmentsSnapShotFromFile.timeStamp && moment(portainerEnvironmentsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
+        if (force || portainerEnvironmentsSnapShotFromFile.timeStamp && moment(portainerEnvironmentsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
             await ensuePortainerSnapShotEnvs(true)
         } else {
             portainerEnvironmentsSnapShot = {
@@ -212,11 +212,11 @@ export const ensurePortainerSnapShotsOnFs = async () => {
     }
 }
 
-export const ensureInfisicalProjectsSnapShotOnFs = async () => {
+export const ensureInfisicalProjectsSnapShotOnFs = async (force = false) => {
 
     try {
         const infisicalProjectsSnapShotFromFile = (await fs.readJSON(`${portainerWrapperTmpFolderPath}/infisicalProjectsSnapShot.json`)) || {}
-        if (infisicalProjectsSnapShotFromFile.timeStamp && moment(infisicalProjectsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
+        if (force || infisicalProjectsSnapShotFromFile.timeStamp && moment(infisicalProjectsSnapShotFromFile.timeStamp).isAfter(moment().add("5", "minutes"))) {
             await ensueInfisicalProjectsSnapShot(true)
         } else {
             infisicalProjectsSnapShot = {

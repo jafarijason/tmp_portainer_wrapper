@@ -382,7 +382,7 @@ export const deployCommonTemplate = async ({
     ] = await Promise.all([
         (async () => {
             try {
-                if(!infisicalEnv || !infisicalProject.id) {
+                if (!infisicalEnv || !infisicalProject.id) {
                     return { secrets: [] }
                 }
                 return await infisicalClient.secrets().listSecrets({
@@ -399,7 +399,7 @@ export const deployCommonTemplate = async ({
         })(),
         (async () => {
             try {
-                if(!infisicalEnv || !commonTemplateProject.id) {
+                if (!infisicalEnv || !commonTemplateProject.id) {
                     return { secrets: [] }
                 }
                 return await infisicalClient.secrets().listSecrets({
@@ -527,10 +527,48 @@ export const standAloneEnvsList = async () => {
 }
 
 export const standAloneEnvsListStdOut = async () => {
-    await standAloneEnvsList()
     const result = await standAloneEnvsList()
     result.forEach((key) => {
         process.stdout.write(`${key}\n`)
     })
 }
 
+export const tagsList = async () => {
+    await ensurePortainerSnapShotsOnFs()
+    const tagsObj = portainerEnvironmentsSnapShot?.tagsObj
+    const result = Object.keys(tagsObj).filter(key => !key.includes('__'))
+    return result
+}
+
+export const tagsListStdOut = async () => {
+    const result = await tagsList()
+    result.forEach((key) => {
+        process.stdout.write(`${key}\n`)
+    })
+}
+
+export const getEnvsObjHasTag = async (tag) => {
+    if (!tag) {
+        throw new Error(`Tag is not present`)
+    }
+    await ensurePortainerSnapShotsOnFs()
+    const tagsObj = portainerEnvironmentsSnapShot?.tagsObj
+    const tagObj = tagsObj[tag] || {}
+    if (_.isEmpty(tagObj)) {
+        throw new Error(`${tag} is not exist in tagsObj`)
+    }
+    const envIdMaps = portainerEnvironmentsSnapShot?.envIdMaps
+    const envs = {}
+    tagObj.tagEnvs.forEach(envId => {
+        envs[envIdMaps[envId]] = true
+    })
+    return envs
+}
+
+
+export const getTagToMetadataObj = async (envKey) => {
+    await ensurePortainerSnapShotsOnFs()
+    const envs = portainerEnvironmentsSnapShot?.envs
+    const tagToMetadataObj = _.get(envs, `['${envKey}'].tagToMetadataObj`, {})
+    return tagToMetadataObj
+}

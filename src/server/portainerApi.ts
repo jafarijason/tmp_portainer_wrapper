@@ -30,7 +30,7 @@ export const portainerApiAndJsonResponse = async ({ path, token, method, body = 
 
                 return { type: "text", response }
             } catch (err2) {
-                console.log('no response data available')
+                // console.log('no response data available')
                 // console.log("Error " + err)
                 // console.log("Error2 " + err2)
             }
