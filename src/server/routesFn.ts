@@ -13,6 +13,7 @@ import {
     commonTemplatesSnapShot,
     infisicalClient,
     ensureCommonTemplatesSnapShot,
+    ensurePortainerSnapShotsOnFs,
 } from "./portainerExpressMiddleware"
 import { UnprocessableEntityException } from "@nestjs/common"
 import { pipeline } from "stream"
@@ -339,9 +340,16 @@ portainerExpressMiddleware.post("/commonTemplatesConfigAll", async (req, res) =>
     })
 })
 
-portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
-    const body = req.body
-    const selectedEnv = body?.selectedEnv
+export const deployCommonTemplate = async ({
+    templateKey,
+    selectedEnv,
+    isStackAlreadyDeployed,
+    alreadyDeployedStackId,
+    stackName
+}) => {
+
+    console.log('deployCommonTemplate', `deploying ${templateKey} in ${selectedEnv} and isStackAlreadyDeployed ${isStackAlreadyDeployed} with stack name of ${stackName} start...`)
+
     if (!selectedEnv) {
         throw new Error(`selectedEnv is not exist`)
     }
@@ -351,9 +359,7 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
         throw new Error(`selectedEnv is not present in portainer`)
     }
 
-    const isStackAlreadyDeployed = body.isStackAlreadyDeployed
 
-    const templateKey = body?.templateKey
     if (!templateKey) {
         throw new Error(`templateKey is not exist`)
     }
@@ -368,6 +374,7 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
     const infisicalProject = _.get(infisicalProjectsSnapShot, `projects[${selectedEnv}]`, {})
     const commonTemplateProject = _.get(infisicalProjectsSnapShot, `projects['${`commonTemplates_${template.fileName}`}']`, {})
 
+    await ensureInfisicalApiToken()
     const [
         //
         infisicalPortainerEnv,
@@ -375,6 +382,9 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
     ] = await Promise.all([
         (async () => {
             try {
+                if(!infisicalEnv || !infisicalProject.id) {
+                    return { secrets: [] }
+                }
                 return await infisicalClient.secrets().listSecrets({
                     environment: infisicalEnv,
                     projectId: infisicalProject.id,
@@ -389,6 +399,9 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
         })(),
         (async () => {
             try {
+                if(!infisicalEnv || !commonTemplateProject.id) {
+                    return { secrets: [] }
+                }
                 return await infisicalClient.secrets().listSecrets({
                     environment: infisicalEnv,
                     projectId: commonTemplateProject.id,
@@ -424,8 +437,9 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
         commonTemplateEnv,
     })
 
+
     if (isStackAlreadyDeployed) {
-        const alreadyDeployedStackId = body.alreadyDeployedStackId
+
         if (!alreadyDeployedStackId) {
             throw new Error(`alreadyDeployedStackId is not exist`)
         }
@@ -442,7 +456,7 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
             },
         })
     } else {
-        const stackName = body.stackName
+
         if (!stackName) {
             throw new Error(`stackName is not exist`)
         }
@@ -467,7 +481,56 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
         ensuePortainerSnapShotEnvs(true)
     ])
 
+    await fs.writeFile(`${portainerWrapperTmpFolderPath}/${templateKey}__${selectedEnv}__${stackName}.yaml`, parsedTemplateYaml, "utf8")
+    console.log('deployCommonTemplate', `deploying ${templateKey} in ${selectedEnv} and isStackAlreadyDeployed ${isStackAlreadyDeployed} with stack name of ${stackName} done`)
+
+    return parsedTemplateYaml;
+}
+
+portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
+    const body = req.body
+    const selectedEnv = body?.selectedEnv
+    const templateKey = body?.templateKey
+    const isStackAlreadyDeployed = body.isStackAlreadyDeployed
+    const alreadyDeployedStackId = body.alreadyDeployedStackId
+    const stackName = body.stackName
+    const parsedTemplateYaml = await deployCommonTemplate({
+        templateKey,
+        selectedEnv,
+        isStackAlreadyDeployed,
+        alreadyDeployedStackId,
+        stackName
+    })
     res.json({
         parsedTemplateYaml,
     })
 })
+
+
+export const commonTemplatesList = async () => {
+    await ensureCommonTemplatesSnapShot()
+    return Object.keys(commonTemplatesSnapShot.templates).map((key) => key.replace('__yaml', '')) || []
+}
+
+export const commonTemplatesListStdOut = async () => {
+    const result = await commonTemplatesList()
+    result.forEach((key) => {
+        process.stdout.write(`${key}\n`)
+    })
+}
+
+export const standAloneEnvsList = async () => {
+    await ensurePortainerSnapShotsOnFs()
+    const envs = portainerEnvironmentsSnapShot?.envs
+    const standAloneEnvs = Object.keys(envs).filter((envKey) => !envs[envKey].isSwarm)
+    return standAloneEnvs
+}
+
+export const standAloneEnvsListStdOut = async () => {
+    await standAloneEnvsList()
+    const result = await standAloneEnvsList()
+    result.forEach((key) => {
+        process.stdout.write(`${key}\n`)
+    })
+}
+
