@@ -555,7 +555,7 @@ export const getEnvsObjHasTag = async (tag) => {
     const tagsObj = portainerEnvironmentsSnapShot?.tagsObj
     const tagObj = tagsObj[tag] || {}
     if (_.isEmpty(tagObj)) {
-        throw new Error(`${tag} is not exist in tagsObj`)
+        return {}
     }
     const envIdMaps = portainerEnvironmentsSnapShot?.envIdMaps
     const envs = {}
