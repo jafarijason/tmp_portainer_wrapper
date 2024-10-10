@@ -22,7 +22,7 @@ import { promisify } from "util"
 import fs from "fs-extra"
 import { portainerApiAndJsonResponse } from "./portainerApi"
 import { Router } from "express"
-import { infisicalApiAndJsonResponse } from "./infisicalApi"
+import { deleteInfisicalProject, infisicalApiAndJsonResponse } from "./infisicalApi"
 import * as YAML from "js-yaml"
 import _ from "lodash"
 
@@ -298,6 +298,7 @@ export const ensueInfisicalProjectsSnapShot = async (force = false) => {
             method: "GET",
             body: {},
         })
+        infisicalProjectsSnapShot.projects = {}
         infisicalProjectsSnapShot.timeStamp = moment().toISOString()
         snapShot?.workspaces?.forEach((project) => {
             const environmentsObj: any = {}
@@ -320,7 +321,7 @@ export const ensueInfisicalProjectsSnapShot = async (force = false) => {
 }
 
 portainerExpressMiddleware.post("/infisicalProjectsSnapShot", async (req, res) => {
-    const snapShot = await ensueInfisicalProjectsSnapShot()
+    const snapShot = await ensueInfisicalProjectsSnapShot(true)
     // portainerEnvironmentsSnapShot.envsList = snapShot
     res.json(infisicalProjectsSnapShot)
 })
@@ -503,6 +504,20 @@ portainerExpressMiddleware.post("/deployCommonTemplate", async (req, res) => {
     })
     res.json({
         parsedTemplateYaml,
+    })
+})
+
+portainerExpressMiddleware.post("/deleteInfisicalProject", async (req, res) => {
+    const body = req.body
+    const workspaceId = body?.workspaceId
+    if (!workspaceId) {
+        throw new Error(`workspaceId is not exist`)
+    }
+
+    await deleteInfisicalProject(workspaceId)
+
+    res.json({
+        message: 'success',
     })
 })
 

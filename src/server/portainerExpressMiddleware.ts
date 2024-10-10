@@ -44,6 +44,7 @@ interface PortainerWrapperConfig {
     portainerWrapperTmpFolderPath?: string
     infisicalConfig?: InfisicalConfig
     forceEnsureSnapShots: boolean
+    extraOptions? : Object
 }
 
 export let portainerUrl = ""
@@ -57,6 +58,7 @@ export let portainerWrapperTmpFolderPath = ""
 export let infisicalConfig: InfisicalConfig
 export let infisicalApiToken = ""
 export let infisicalApiTokenPayload: any = {}
+export let extraOptions: any = {}
 
 export let portainerEnvironmentsSnapShot: any = {
     // timeStamp: moment().toISOString(),
@@ -288,6 +290,7 @@ export const portainerExpressMiddlewareWrapper = (config: PortainerWrapperConfig
 
     if (config?.infisicalConfig?.infisicalClientId) {
         infisicalConfig = config?.infisicalConfig
+        extraOptions = config?.extraOptions || {}
         configureInfisicalClient(config?.infisicalConfig);
 
         if (config?.forceEnsureSnapShots) {

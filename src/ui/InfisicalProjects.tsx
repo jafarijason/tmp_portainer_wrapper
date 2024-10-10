@@ -10,6 +10,7 @@ const InfisicalProjects = () => {
 
     const [apiDataState, setApiDataState] = useImmer({
         data: {},
+        counter: 1,
     })
 
     useEffect(() => {
@@ -21,7 +22,7 @@ const InfisicalProjects = () => {
                 draft.data = res
             })
         })()
-    }, [])
+    }, [apiDataState.counter])
 
     const projects = apiDataState?.data?.projects || {}
 
@@ -60,12 +61,29 @@ const InfisicalProjects = () => {
                         align: "center" as const,
                         render: (row) => {
                             return (
-                                <Button
-                                    onClick={async () => {
-                                        window.open(`${portainerState?.config?.infisicalUrl}/project/${row.id}/secrets/overview`, "_blank")
-                                    }}>
-                                    Open Project
-                                </Button>
+                                <>
+                                    <Button
+                                        onClick={async () => {
+                                            window.open(`${portainerState?.config?.infisicalUrl}/project/${row.id}/secrets/overview`, "_blank")
+                                        }}>
+                                        Open Project
+                                    </Button>
+                                    <Button
+                                        onClick={async () => {
+                                            // const res = await apiCallAndReturnJson("deleteInfisicalProject", {
+                                            //     method: "POST",
+                                            //     body: JSON.stringify({
+                                            //         workspaceId: row.id,
+                                            //     }),
+                                            // })
+                                            // setApiDataState((draft) => {
+                                            //     draft.counter = draft.counter + 1
+                                            // })
+                                            console.log('disabled')
+                                        }}>
+                                        Delete Project
+                                    </Button>
+                                </>
                             )
                         },
                     },
